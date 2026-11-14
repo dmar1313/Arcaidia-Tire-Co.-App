@@ -95,6 +95,8 @@ export const AuthGate: React.FC<AuthGateProps> = ({
               Sign in with Google
             </button>
 
+            <PWAInstallButton full />
+
             <div className="mt-6 pt-5 border-t border-slate-100 text-xs text-slate-500 space-y-1.5">
               <p className="font-medium text-slate-700">Setting up for the first time?</p>
               <p>
