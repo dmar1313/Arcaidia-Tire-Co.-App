@@ -1,0 +1,339 @@
+@import "tailwindcss";
+
+@theme {
+  --font-display: "Plus Jakarta Sans", system-ui, -apple-system, sans-serif;
+  --font-sans: "DM Sans", system-ui, -apple-system, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  --color-arcadia: #C81E2B;
+  --color-arcadia-dark: #A61722;
+}
+
+@layer base {
+  body {
+    font-family: var(--font-sans);
+    background-color: #F7F6F2;
+    color: #111111;
+  }
+
+  h1, h2, h3, h4 {
+    font-family: var(--font-display);
+  }
+
+  button, a, select, input, textarea {
+    touch-action: manipulation;
+  }
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.arcadia-track-bg {
+  background-color: #F7F6F2;
+  background-image:
+    repeating-linear-gradient(
+      -45deg,
+      rgba(17, 17, 17, 0.025) 0px,
+      rgba(17, 17, 17, 0.025) 2px,
+      transparent 2px,
+      transparent 14px
+    );
+}
+
+.print-receipt-sheet {
+  display: none;
+}
+
+@page {
+  size: auto;
+  margin: 0.5in 0.55in;
+}
+
+@media print {
+  html,
+  body {
+    width: 100%;
+    height: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+    color: #0f172a !important;
+    font-size: 10pt !important;
+    line-height: 1.4 !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .no-print,
+  aside,
+  header,
+  nav[aria-label="Mobile Navigation"] {
+    display: none !important;
+  }
+
+  /* Reset fixed modal & overflow wrappers so receipts print cleanly across pages */
+  .print-modal-root {
+    position: static !important;
+    inset: auto !important;
+    display: block !important;
+    width: 100% !important;
+    height: auto !important;
+    max-height: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    background: #ffffff !important;
+    overflow: visible !important;
+  }
+
+  .print-modal-card {
+    position: static !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    max-height: none !important;
+    border: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    overflow: visible !important;
+    background: #ffffff !important;
+  }
+
+  /* Dedicated PDF-style receipt layout sized for Letter & A4 printer paper */
+  .print-receipt-sheet {
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 auto !important;
+    padding: 0 !important;
+    color: #0f172a !important;
+    background: #ffffff !important;
+    font-family: var(--font-sans);
+    font-size: 9.75pt !important;
+    line-height: 1.38 !important;
+  }
+
+  .print-receipt-header {
+    display: flex !important;
+    align-items: flex-start !important;
+    justify-content: space-between !important;
+    gap: 16pt !important;
+    padding-bottom: 10pt !important;
+    border-bottom: 1.75pt solid #C81E2B !important;
+    break-inside: avoid;
+  }
+
+  .print-receipt-shop-name {
+    font-family: var(--font-display);
+    font-size: 16pt !important;
+    font-weight: 700 !important;
+    line-height: 1.15 !important;
+    color: #0f172a !important;
+    margin: 0 0 3pt 0 !important;
+  }
+
+  .print-receipt-logo {
+    margin-bottom: 4pt !important;
+  }
+
+  .print-receipt-shop-meta {
+    font-size: 8.75pt !important;
+    line-height: 1.35 !important;
+    color: #475569 !important;
+    margin: 0 !important;
+  }
+
+  .print-receipt-status {
+    font-family: var(--font-display);
+    font-size: 10.5pt !important;
+    font-weight: 700 !important;
+    letter-spacing: 0.04em !important;
+    text-transform: uppercase !important;
+    text-align: right !important;
+    color: #0f172a !important;
+    margin: 0 0 3pt 0 !important;
+  }
+
+  .print-receipt-status.is-voided {
+    color: #dc2626 !important;
+  }
+
+  .print-receipt-paid-date {
+    margin: 2pt 0 0 0 !important;
+  }
+
+  .print-receipt-notes-body {
+    margin: 0 !important;
+    white-space: pre-wrap !important;
+  }
+
+  .print-receipt-order-meta {
+    font-family: var(--font-mono);
+    font-size: 9.5pt !important;
+    text-align: right !important;
+    color: #0f172a !important;
+    margin: 0 !important;
+  }
+
+  .print-receipt-date {
+    font-size: 8.5pt !important;
+    text-align: right !important;
+    color: #64748b !important;
+    margin: 2pt 0 0 0 !important;
+  }
+
+  .print-receipt-parties {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 16pt !important;
+    padding: 10pt 0 !important;
+    border-bottom: 0.75pt solid #cbd5e1 !important;
+    break-inside: avoid;
+  }
+
+  .print-receipt-section-label {
+    font-size: 8pt !important;
+    font-weight: 700 !important;
+    letter-spacing: 0.06em !important;
+    text-transform: uppercase !important;
+    color: #64748b !important;
+    margin: 0 0 3pt 0 !important;
+  }
+
+  .print-receipt-party-name {
+    font-size: 10.25pt !important;
+    font-weight: 700 !important;
+    color: #0f172a !important;
+    margin: 0 0 2pt 0 !important;
+  }
+
+  .print-receipt-party-detail {
+    font-size: 8.75pt !important;
+    line-height: 1.38 !important;
+    color: #334155 !important;
+    margin: 0 !important;
+  }
+
+  .print-receipt-table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    margin-top: 10pt !important;
+    font-size: 9.25pt !important;
+  }
+
+  .print-receipt-table thead {
+    display: table-header-group;
+  }
+
+  .print-receipt-table th {
+    font-size: 8pt !important;
+    font-weight: 700 !important;
+    letter-spacing: 0.05em !important;
+    text-transform: uppercase !important;
+    color: #64748b !important;
+    padding: 5pt 4pt !important;
+    border-bottom: 1pt solid #94a3b8 !important;
+    text-align: left !important;
+  }
+
+  .print-receipt-table th.is-num,
+  .print-receipt-table td.is-num {
+    text-align: right !important;
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  .print-receipt-table tr {
+    break-inside: avoid;
+  }
+
+  .print-receipt-table td {
+    padding: 6pt 4pt !important;
+    border-bottom: 0.5pt solid #e2e8f0 !important;
+    vertical-align: top !important;
+    color: #0f172a !important;
+  }
+
+  .print-receipt-totals-wrap {
+    display: flex !important;
+    justify-content: flex-end !important;
+    margin-top: 10pt !important;
+    break-inside: avoid;
+  }
+
+  .print-receipt-totals {
+    width: 215pt !important;
+    font-size: 9.25pt !important;
+  }
+
+  .print-receipt-total-row {
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: baseline !important;
+    padding: 2.5pt 0 !important;
+    color: #334155 !important;
+  }
+
+  .print-receipt-grand-total {
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: baseline !important;
+    margin-top: 4pt !important;
+    padding-top: 5pt !important;
+    border-top: 1.25pt solid #0f172a !important;
+    font-size: 11.5pt !important;
+    font-weight: 700 !important;
+    color: #0f172a !important;
+  }
+
+  .print-receipt-payment-meta {
+    margin-top: 6pt !important;
+    padding-top: 5pt !important;
+    border-top: 0.5pt dashed #cbd5e1 !important;
+    font-size: 8.75pt !important;
+    color: #334155 !important;
+  }
+
+  .print-receipt-void-box {
+    margin-top: 10pt !important;
+    padding: 8pt 10pt !important;
+    border: 1.25pt solid #dc2626 !important;
+    background: #fef2f2 !important;
+    color: #991b1b !important;
+    font-size: 9pt !important;
+    break-inside: avoid;
+  }
+
+  .print-receipt-notes {
+    margin-top: 10pt !important;
+    padding: 8pt 10pt !important;
+    border: 0.75pt solid #cbd5e1 !important;
+    background: #f8fafc !important;
+    font-size: 8.75pt !important;
+    color: #334155 !important;
+    break-inside: avoid;
+  }
+
+  .print-receipt-footer {
+    margin-top: 16pt !important;
+    padding-top: 8pt !important;
+    border-top: 0.75pt solid #cbd5e1 !important;
+    text-align: center !important;
+    font-size: 8.25pt !important;
+    color: #64748b !important;
+    break-inside: avoid;
+  }
+}
+

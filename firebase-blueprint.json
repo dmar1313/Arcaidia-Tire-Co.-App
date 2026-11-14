@@ -1,0 +1,270 @@
+{
+  "entities": {
+    "CompanyProfile": {
+      "title": "CompanyProfile",
+      "description": "Shop profile, receipt header info, and Iowa sales tax configuration managed by shop management.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 64, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "shopName": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "address": { "type": "string", "maxLength": 200 },
+        "cityStateZip": { "type": "string", "maxLength": 120 },
+        "phone": { "type": "string", "maxLength": 40 },
+        "email": { "type": "string", "maxLength": 120 },
+        "iowaTaxRate": { "type": "number" },
+        "workOrderPrefix": { "type": "string", "minLength": 1, "maxLength": 10 },
+        "nextOrderNumber": { "type": "number" },
+        "receiptFooter": { "type": "string", "maxLength": 300 },
+        "updatedByUid": { "type": "string", "maxLength": 128 },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "shopName", "iowaTaxRate", "workOrderPrefix", "nextOrderNumber", "updatedByUid", "updatedAt"]
+    },
+    "StaffMember": {
+      "title": "StaffMember",
+      "description": "Shop staff account created by management linking a Google email to either management or mechanic role.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "email": { "type": "string", "minLength": 3, "maxLength": 120 },
+        "role": { "type": "string", "enum": ["management", "mechanic"] },
+        "baySpecialty": { "type": "string", "maxLength": 80 },
+        "active": { "type": "boolean" },
+        "createdByUid": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "name", "email", "role", "active", "createdByUid", "createdAt", "updatedAt"]
+    },
+    "ServiceCatalogItem": {
+      "title": "ServiceCatalogItem",
+      "description": "Fixed-price service or tire/part item configured by management.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "category": { "type": "string", "enum": ["tire_repair", "tire_sale", "oil_change", "tune_up", "maintenance", "part"] },
+        "description": { "type": "string", "maxLength": 240 },
+        "unitPrice": { "type": "number" },
+        "taxable": { "type": "boolean" },
+        "active": { "type": "boolean" },
+        "updatedByUid": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "name", "category", "unitPrice", "taxable", "active", "updatedByUid", "createdAt", "updatedAt"]
+    },
+    "Customer": {
+      "title": "Customer",
+      "description": "Shop customer contact record.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "name": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "phone": { "type": "string", "minLength": 1, "maxLength": 40 },
+        "email": { "type": "string", "maxLength": 120 },
+        "notes": { "type": "string", "maxLength": 500 },
+        "createdByUid": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "name", "phone", "createdByUid", "createdAt", "updatedAt"]
+    },
+    "Vehicle": {
+      "title": "Vehicle",
+      "description": "Customer vehicle linked to a customer ID with plate, VIN, and mileage.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "customerId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "customerName": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "year": { "type": "number" },
+        "make": { "type": "string", "minLength": 1, "maxLength": 60 },
+        "model": { "type": "string", "minLength": 1, "maxLength": 60 },
+        "licensePlate": { "type": "string", "maxLength": 24 },
+        "vin": { "type": "string", "maxLength": 24 },
+        "mileage": { "type": "number" },
+        "createdByUid": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "customerId", "customerName", "year", "make", "model", "mileage", "createdByUid", "createdAt", "updatedAt"]
+    },
+    "WorkOrder": {
+      "title": "WorkOrder",
+      "description": "Shop work order with customer, vehicle, bounded line items, Iowa sales tax, payment, and void state.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "orderNumber": { "type": "string", "minLength": 1, "maxLength": 30 },
+        "status": { "type": "string", "enum": ["intake", "in_progress", "waiting_on_parts", "ready", "paid", "voided"] },
+        "customerId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "customerName": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "customerPhone": { "type": "string", "minLength": 1, "maxLength": 40 },
+        "customerEmail": { "type": "string", "maxLength": 120 },
+        "vehicleId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "vehicleYear": { "type": "number" },
+        "vehicleMake": { "type": "string", "minLength": 1, "maxLength": 60 },
+        "vehicleModel": { "type": "string", "minLength": 1, "maxLength": 60 },
+        "licensePlate": { "type": "string", "maxLength": 24 },
+        "vin": { "type": "string", "maxLength": 24 },
+        "mileage": { "type": "number" },
+        "assignedMechanicId": { "type": "string", "maxLength": 128 },
+        "assignedMechanicName": { "type": "string", "maxLength": 100 },
+        "notes": { "type": "string", "maxLength": 1000 },
+        "lineItems": { "type": "array" },
+        "subtotal": { "type": "number" },
+        "discount": { "type": "number" },
+        "taxRate": { "type": "number" },
+        "taxAmount": { "type": "number" },
+        "total": { "type": "number" },
+        "paymentMethod": { "type": "string", "enum": ["none", "cash", "card"] },
+        "amountPaid": { "type": "number" },
+        "paidAt": { "type": "string", "maxLength": 40 },
+        "paidByName": { "type": "string", "maxLength": 100 },
+        "paidByUid": { "type": "string", "maxLength": 128 },
+        "completedAt": { "type": "string", "maxLength": 40 },
+        "completedByName": { "type": "string", "maxLength": 100 },
+        "completedByUid": { "type": "string", "maxLength": 128 },
+        "voidReason": { "type": "string", "maxLength": 400 },
+        "voidedAt": { "type": "string", "maxLength": 40 },
+        "voidedByName": { "type": "string", "maxLength": 100 },
+        "voidedByUid": { "type": "string", "maxLength": 128 },
+        "createdByUid": { "type": "string", "maxLength": 128 },
+        "createdByName": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "id",
+        "orderNumber",
+        "status",
+        "customerId",
+        "customerName",
+        "customerPhone",
+        "vehicleId",
+        "vehicleYear",
+        "vehicleMake",
+        "vehicleModel",
+        "mileage",
+        "lineItems",
+        "subtotal",
+        "discount",
+        "taxRate",
+        "taxAmount",
+        "total",
+        "paymentMethod",
+        "amountPaid",
+        "createdByUid",
+        "createdByName",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "WorkOrderAuditEntry": {
+      "title": "WorkOrderAuditEntry",
+      "description": "Immutable audit trail entry for work order lifecycle events.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "workOrderId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "action": { "type": "string", "enum": ["created", "status_changed", "items_updated", "completed", "paid", "voided"] },
+        "details": { "type": "string", "minLength": 1, "maxLength": 500 },
+        "actorUid": { "type": "string", "maxLength": 128 },
+        "actorName": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "actorRole": { "type": "string", "enum": ["management", "mechanic"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "workOrderId", "action", "details", "actorUid", "actorName", "actorRole", "createdAt"]
+    },
+    "PriceAuditEntry": {
+      "title": "PriceAuditEntry",
+      "description": "Immutable audit log entry recording management price changes on catalog services.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "serviceId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "serviceName": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "oldPrice": { "type": "number" },
+        "newPrice": { "type": "number" },
+        "actorUid": { "type": "string", "maxLength": 128 },
+        "actorName": { "type": "string", "minLength": 1, "maxLength": 100 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "serviceId", "serviceName", "oldPrice", "newPrice", "actorUid", "actorName", "createdAt"]
+    },
+    "StaffNotification": {
+      "title": "StaffNotification",
+      "description": "Real-time staff push notification event for new jobs and completed jobs.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "targetRole": { "type": "string", "enum": ["management", "mechanic", "all"] },
+        "targetStaffId": { "type": "string", "maxLength": 128 },
+        "title": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "body": { "type": "string", "minLength": 1, "maxLength": 300 },
+        "workOrderId": { "type": "string", "maxLength": 128 },
+        "orderNumber": { "type": "string", "maxLength": 30 },
+        "createdByUid": { "type": "string", "maxLength": 128 },
+        "readByUids": { "type": "array" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "targetRole", "title", "body", "createdByUid", "readByUids", "createdAt"]
+    },
+    "ShopStatus": {
+      "title": "ShopStatus",
+      "description": "Non-PII initialization flag indicating whether a shop has been claimed by an owner.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 64, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "initialized": { "type": "boolean" },
+        "createdByUid": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "initialized", "createdByUid", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/shop_status/{statusId}": {
+      "schema": { "$ref": "#/entities/ShopStatus" },
+      "description": "Non-PII flag indicating if the shop has been initialized."
+    },
+    "/company/{companyId}": {
+      "schema": { "$ref": "#/entities/CompanyProfile" },
+      "description": "Shop profile and Iowa tax settings."
+    },
+    "/staff/{staffId}": {
+      "schema": { "$ref": "#/entities/StaffMember" },
+      "description": "Authorized shop management and mechanic accounts."
+    },
+    "/services/{serviceId}": {
+      "schema": { "$ref": "#/entities/ServiceCatalogItem" },
+      "description": "Management-configured fixed price catalog for tires, oil changes, tune-ups, and parts."
+    },
+    "/customers/{customerId}": {
+      "schema": { "$ref": "#/entities/Customer" },
+      "description": "Shop customer contact records."
+    },
+    "/vehicles/{vehicleId}": {
+      "schema": { "$ref": "#/entities/Vehicle" },
+      "description": "Customer vehicles with year/make/model, plate, VIN, and mileage."
+    },
+    "/work_orders/{workOrderId}": {
+      "schema": { "$ref": "#/entities/WorkOrder" },
+      "description": "Work orders tracking status, line items, taxes, payment, and void state."
+    },
+    "/work_orders/{workOrderId}/audit_log/{logId}": {
+      "schema": { "$ref": "#/entities/WorkOrderAuditEntry" },
+      "description": "Append-only audit trail for each work order."
+    },
+    "/price_audit_log/{logId}": {
+      "schema": { "$ref": "#/entities/PriceAuditEntry" },
+      "description": "Append-only audit trail for service price changes."
+    },
+    "/staff_notifications/{notificationId}": {
+      "schema": { "$ref": "#/entities/StaffNotification" },
+      "description": "Staff-only push notifications for new jobs and completed jobs."
+    }
+  }
+}

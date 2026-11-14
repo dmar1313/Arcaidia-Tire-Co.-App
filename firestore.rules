@@ -1,0 +1,568 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global default-deny safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- Primitive Helpers ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true && request.auth.token.email is string;
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function emailKey() {
+      return request.auth.token.email.lower().replace('[^a-z0-9]', '_');
+    }
+
+    function isBootstrapAdmin() {
+      return isVerified() && request.auth.token.email.lower() == 'a.infj.13@gmail.com';
+    }
+
+    function staffPath() {
+      return /databases/$(database)/documents/staff/$(emailKey());
+    }
+
+    function isActiveStaff() {
+      return isVerified() && (
+        isBootstrapAdmin() ||
+        (exists(staffPath()) && get(staffPath()).data.active == true)
+      );
+    }
+
+    function isManager() {
+      return isVerified() && (
+        isBootstrapAdmin() ||
+        (exists(staffPath()) && get(staffPath()).data.active == true && get(staffPath()).data.role == 'management')
+      );
+    }
+
+    function isValidOptString(val, maxLen) {
+      return val is string && val.size() <= maxLen;
+    }
+
+    function isValidReqString(val, minLen, maxLen) {
+      return val is string && val.size() >= minLen && val.size() <= maxLen;
+    }
+
+    // --- Entity Validation Helpers ---
+    function isValidCompany(data) {
+      return data.keys().hasAll([
+          'id', 'shopName', 'iowaTaxRate', 'workOrderPrefix', 'nextOrderNumber', 'updatedByUid', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'id', 'shopName', 'address', 'cityStateZip', 'phone', 'email',
+          'iowaTaxRate', 'workOrderPrefix', 'nextOrderNumber', 'receiptFooter',
+          'updatedByUid', 'updatedAt'
+        ]) &&
+        isValidId(data.id) &&
+        isValidReqString(data.shopName, 1, 120) &&
+        (!('address' in data) || isValidOptString(data.address, 200)) &&
+        (!('cityStateZip' in data) || isValidOptString(data.cityStateZip, 120)) &&
+        (!('phone' in data) || isValidOptString(data.phone, 40)) &&
+        (!('email' in data) || isValidOptString(data.email, 120)) &&
+        (data.iowaTaxRate is int || data.iowaTaxRate is float) &&
+        data.iowaTaxRate >= 0 && data.iowaTaxRate <= 25 &&
+        isValidReqString(data.workOrderPrefix, 1, 10) &&
+        (data.nextOrderNumber is int || data.nextOrderNumber is float) &&
+        data.nextOrderNumber >= 1 &&
+        (!('receiptFooter' in data) || isValidOptString(data.receiptFooter, 300)) &&
+        data.updatedByUid == request.auth.uid &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidStaff(data) {
+      return data.keys().hasAll([
+          'id', 'name', 'email', 'role', 'active', 'createdByUid', 'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'id', 'name', 'email', 'role', 'baySpecialty', 'active', 'createdByUid', 'createdAt', 'updatedAt'
+        ]) &&
+        isValidId(data.id) &&
+        isValidReqString(data.name, 1, 100) &&
+        isValidReqString(data.email, 3, 120) &&
+        (data.role in ['management', 'mechanic']) &&
+        (!('baySpecialty' in data) || isValidOptString(data.baySpecialty, 80)) &&
+        data.active is bool &&
+        isValidReqString(data.createdByUid, 1, 128) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidService(data) {
+      return data.keys().hasAll([
+          'id', 'name', 'category', 'unitPrice', 'taxable', 'active', 'updatedByUid', 'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'id', 'name', 'category', 'description', 'unitPrice', 'taxable', 'active', 'updatedByUid', 'createdAt', 'updatedAt'
+        ]) &&
+        isValidId(data.id) &&
+        isValidReqString(data.name, 1, 120) &&
+        (data.category in ['tire_repair', 'tire_sale', 'oil_change', 'tune_up', 'maintenance', 'part']) &&
+        (!('description' in data) || isValidOptString(data.description, 240)) &&
+        (data.unitPrice is int || data.unitPrice is float) &&
+        data.unitPrice >= 0 && data.unitPrice <= 50000 &&
+        data.taxable is bool &&
+        data.active is bool &&
+        data.updatedByUid == request.auth.uid &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidCustomer(data) {
+      return data.keys().hasAll([
+          'id', 'name', 'phone', 'createdByUid', 'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'id', 'name', 'phone', 'email', 'notes', 'createdByUid', 'createdAt', 'updatedAt'
+        ]) &&
+        isValidId(data.id) &&
+        isValidReqString(data.name, 1, 120) &&
+        isValidReqString(data.phone, 1, 40) &&
+        (!('email' in data) || isValidOptString(data.email, 120)) &&
+        (!('notes' in data) || isValidOptString(data.notes, 500)) &&
+        isValidReqString(data.createdByUid, 1, 128) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidVehicle(data) {
+      return data.keys().hasAll([
+          'id', 'customerId', 'customerName', 'year', 'make', 'model', 'mileage', 'createdByUid', 'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'id', 'customerId', 'customerName', 'year', 'make', 'model',
+          'licensePlate', 'vin', 'mileage', 'createdByUid', 'createdAt', 'updatedAt'
+        ]) &&
+        isValidId(data.id) &&
+        isValidId(data.customerId) &&
+        isValidReqString(data.customerName, 1, 120) &&
+        (data.year is int || data.year is float) &&
+        data.year >= 1900 && data.year <= 2100 &&
+        isValidReqString(data.make, 1, 60) &&
+        isValidReqString(data.model, 1, 60) &&
+        (!('licensePlate' in data) || isValidOptString(data.licensePlate, 24)) &&
+        (!('vin' in data) || isValidOptString(data.vin, 24)) &&
+        (data.mileage is int || data.mileage is float) &&
+        data.mileage >= 0 && data.mileage <= 2000000 &&
+        isValidReqString(data.createdByUid, 1, 128) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidLineItemsList(items) {
+      return items is list &&
+        items.size() <= 30 &&
+        (items.size() == 0 || (
+          items[0] is map &&
+          items[0].keys().hasAll(['id', 'name', 'category', 'isCatalogService', 'qty', 'unitPrice', 'taxable']) &&
+          items[0].name is string &&
+          (items[0].qty is int || items[0].qty is float) &&
+          (items[0].unitPrice is int || items[0].unitPrice is float)
+        ));
+    }
+
+    function isValidWorkOrder(data) {
+      return data.keys().hasAll([
+          'id', 'orderNumber', 'status', 'customerId', 'customerName', 'customerPhone',
+          'vehicleId', 'vehicleYear', 'vehicleMake', 'vehicleModel', 'mileage',
+          'lineItems', 'subtotal', 'discount', 'taxRate', 'taxAmount', 'total',
+          'paymentMethod', 'amountPaid', 'createdByUid', 'createdByName', 'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'id', 'orderNumber', 'status', 'customerId', 'customerName', 'customerPhone', 'customerEmail',
+          'vehicleId', 'vehicleYear', 'vehicleMake', 'vehicleModel', 'licensePlate', 'vin', 'mileage',
+          'assignedMechanicId', 'assignedMechanicName', 'notes', 'lineItems',
+          'subtotal', 'discount', 'taxRate', 'taxAmount', 'total',
+          'paymentMethod', 'amountPaid', 'paidAt', 'paidByName', 'paidByUid',
+          'completedAt', 'completedByName', 'completedByUid',
+          'voidReason', 'voidedAt', 'voidedByName', 'voidedByUid',
+          'createdByUid', 'createdByName', 'createdAt', 'updatedAt'
+        ]) &&
+        isValidId(data.id) &&
+        isValidReqString(data.orderNumber, 1, 30) &&
+        (data.status in ['intake', 'in_progress', 'waiting_on_parts', 'ready', 'paid', 'voided']) &&
+        isValidId(data.customerId) &&
+        isValidReqString(data.customerName, 1, 120) &&
+        isValidReqString(data.customerPhone, 1, 40) &&
+        (!('customerEmail' in data) || isValidOptString(data.customerEmail, 120)) &&
+        isValidId(data.vehicleId) &&
+        (data.vehicleYear is int || data.vehicleYear is float) &&
+        data.vehicleYear >= 1900 && data.vehicleYear <= 2100 &&
+        isValidReqString(data.vehicleMake, 1, 60) &&
+        isValidReqString(data.vehicleModel, 1, 60) &&
+        (!('licensePlate' in data) || isValidOptString(data.licensePlate, 24)) &&
+        (!('vin' in data) || isValidOptString(data.vin, 24)) &&
+        (data.mileage is int || data.mileage is float) &&
+        data.mileage >= 0 && data.mileage <= 2000000 &&
+        (!('assignedMechanicId' in data) || isValidOptString(data.assignedMechanicId, 128)) &&
+        (!('assignedMechanicName' in data) || isValidOptString(data.assignedMechanicName, 100)) &&
+        (!('notes' in data) || isValidOptString(data.notes, 1000)) &&
+        isValidLineItemsList(data.lineItems) &&
+        (data.subtotal is int || data.subtotal is float) && data.subtotal >= 0 &&
+        (data.discount is int || data.discount is float) && data.discount >= 0 &&
+        (data.taxRate is int || data.taxRate is float) && data.taxRate >= 0 && data.taxRate <= 25 &&
+        (data.taxAmount is int || data.taxAmount is float) && data.taxAmount >= 0 &&
+        (data.total is int || data.total is float) && data.total >= 0 &&
+        (data.paymentMethod in ['none', 'cash', 'card']) &&
+        (data.amountPaid is int || data.amountPaid is float) && data.amountPaid >= 0 &&
+        (!('paidAt' in data) || isValidOptString(data.paidAt, 40)) &&
+        (!('paidByName' in data) || isValidOptString(data.paidByName, 100)) &&
+        (!('paidByUid' in data) || isValidOptString(data.paidByUid, 128)) &&
+        (!('completedAt' in data) || isValidOptString(data.completedAt, 40)) &&
+        (!('completedByName' in data) || isValidOptString(data.completedByName, 100)) &&
+        (!('completedByUid' in data) || isValidOptString(data.completedByUid, 128)) &&
+        (!('voidReason' in data) || isValidOptString(data.voidReason, 400)) &&
+        (!('voidedAt' in data) || isValidOptString(data.voidedAt, 40)) &&
+        (!('voidedByName' in data) || isValidOptString(data.voidedByName, 100)) &&
+        (!('voidedByUid' in data) || isValidOptString(data.voidedByUid, 128)) &&
+        isValidReqString(data.createdByUid, 1, 128) &&
+        isValidReqString(data.createdByName, 1, 100) &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidCustomerUpdate(data) {
+      return (!('id' in data) || isValidId(data.id)) &&
+        (!('name' in data) || isValidReqString(data.name, 1, 120)) &&
+        (!('phone' in data) || isValidOptString(data.phone, 40)) &&
+        (!('email' in data) || isValidOptString(data.email, 120)) &&
+        (!('notes' in data) || isValidOptString(data.notes, 500)) &&
+        (!('createdAt' in data) || data.createdAt is timestamp) &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidVehicleUpdate(data) {
+      return (!('id' in data) || isValidId(data.id)) &&
+        (!('customerId' in data) || isValidId(data.customerId)) &&
+        (!('customerName' in data) || isValidReqString(data.customerName, 1, 120)) &&
+        (!('year' in data) || ((data.year is int || data.year is float) && data.year >= 1900 && data.year <= 2100)) &&
+        (!('make' in data) || isValidReqString(data.make, 1, 60)) &&
+        (!('model' in data) || isValidReqString(data.model, 1, 60)) &&
+        (!('licensePlate' in data) || isValidOptString(data.licensePlate, 24)) &&
+        (!('vin' in data) || isValidOptString(data.vin, 24)) &&
+        (!('mileage' in data) || ((data.mileage is int || data.mileage is float) && data.mileage >= 0 && data.mileage <= 2000000)) &&
+        (!('createdAt' in data) || data.createdAt is timestamp) &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidWorkOrderUpdate(data) {
+      return (data.status in ['intake', 'in_progress', 'waiting_on_parts', 'ready', 'paid', 'voided']) &&
+        (!('id' in data) || isValidId(data.id)) &&
+        (!('assignedMechanicId' in data) || isValidOptString(data.assignedMechanicId, 128)) &&
+        (!('assignedMechanicName' in data) || isValidOptString(data.assignedMechanicName, 100)) &&
+        (!('notes' in data) || isValidOptString(data.notes, 1000)) &&
+        (!('mileage' in data) || ((data.mileage is int || data.mileage is float) && data.mileage >= 0 && data.mileage <= 2000000)) &&
+        (!('lineItems' in data) || isValidLineItemsList(data.lineItems)) &&
+        (!('subtotal' in data) || ((data.subtotal is int || data.subtotal is float) && data.subtotal >= 0)) &&
+        (!('discount' in data) || ((data.discount is int || data.discount is float) && data.discount >= 0)) &&
+        (!('taxRate' in data) || ((data.taxRate is int || data.taxRate is float) && data.taxRate >= 0 && data.taxRate <= 25)) &&
+        (!('taxAmount' in data) || ((data.taxAmount is int || data.taxAmount is float) && data.taxAmount >= 0)) &&
+        (!('total' in data) || ((data.total is int || data.total is float) && data.total >= 0)) &&
+        (!('paymentMethod' in data) || (data.paymentMethod in ['none', 'cash', 'card'])) &&
+        (!('amountPaid' in data) || ((data.amountPaid is int || data.amountPaid is float) && data.amountPaid >= 0)) &&
+        (!('paidAt' in data) || isValidOptString(data.paidAt, 40)) &&
+        (!('paidByName' in data) || isValidOptString(data.paidByName, 100)) &&
+        (!('paidByUid' in data) || isValidOptString(data.paidByUid, 128)) &&
+        (!('completedAt' in data) || isValidOptString(data.completedAt, 40)) &&
+        (!('completedByName' in data) || isValidOptString(data.completedByName, 100)) &&
+        (!('completedByUid' in data) || isValidOptString(data.completedByUid, 128)) &&
+        (!('voidReason' in data) || isValidOptString(data.voidReason, 400)) &&
+        (!('voidedAt' in data) || isValidOptString(data.voidedAt, 40)) &&
+        (!('voidedByName' in data) || isValidOptString(data.voidedByName, 100)) &&
+        (!('voidedByUid' in data) || isValidOptString(data.voidedByUid, 128)) &&
+        (!('createdAt' in data) || data.createdAt is timestamp) &&
+        data.updatedAt is timestamp;
+    }
+
+    function isValidWorkOrderAudit(data) {
+      return data.keys().hasAll([
+          'id', 'workOrderId', 'action', 'details', 'actorUid', 'actorName', 'actorRole', 'createdAt'
+        ]) &&
+        data.keys().hasOnly([
+          'id', 'workOrderId', 'action', 'details', 'actorUid', 'actorName', 'actorRole', 'createdAt'
+        ]) &&
+        isValidId(data.id) &&
+        isValidId(data.workOrderId) &&
+        (data.action in ['created', 'status_changed', 'items_updated', 'completed', 'paid', 'voided']) &&
+        isValidReqString(data.details, 1, 500) &&
+        data.actorUid == request.auth.uid &&
+        isValidReqString(data.actorName, 1, 100) &&
+        (data.actorRole in ['management', 'mechanic']) &&
+        data.createdAt is timestamp;
+    }
+
+    function isValidPriceAudit(data) {
+      return data.keys().hasAll([
+          'id', 'serviceId', 'serviceName', 'oldPrice', 'newPrice', 'actorUid', 'actorName', 'createdAt'
+        ]) &&
+        data.keys().hasOnly([
+          'id', 'serviceId', 'serviceName', 'oldPrice', 'newPrice', 'actorUid', 'actorName', 'createdAt'
+        ]) &&
+        isValidId(data.id) &&
+        isValidId(data.serviceId) &&
+        isValidReqString(data.serviceName, 1, 120) &&
+        (data.oldPrice is int || data.oldPrice is float) && data.oldPrice >= 0 &&
+        (data.newPrice is int || data.newPrice is float) && data.newPrice >= 0 &&
+        data.actorUid == request.auth.uid &&
+        isValidReqString(data.actorName, 1, 100) &&
+        data.createdAt is timestamp;
+    }
+
+    function isValidStaffNotification(data) {
+      return data.keys().hasAll([
+          'id', 'targetRole', 'title', 'body', 'createdByUid', 'readByUids', 'createdAt'
+        ]) &&
+        data.keys().hasOnly([
+          'id', 'targetRole', 'targetStaffId', 'title', 'body', 'workOrderId', 'orderNumber',
+          'createdByUid', 'readByUids', 'createdAt'
+        ]) &&
+        isValidId(data.id) &&
+        (data.targetRole in ['management', 'mechanic', 'all']) &&
+        (!('targetStaffId' in data) || isValidOptString(data.targetStaffId, 128)) &&
+        isValidReqString(data.title, 1, 120) &&
+        isValidReqString(data.body, 1, 300) &&
+        (!('workOrderId' in data) || isValidOptString(data.workOrderId, 128)) &&
+        (!('orderNumber' in data) || isValidOptString(data.orderNumber, 30)) &&
+        isValidReqString(data.createdByUid, 1, 128) &&
+        data.readByUids is list && data.readByUids.size() <= 30 &&
+        (data.readByUids.size() == 0 || data.readByUids[0] is string) &&
+        data.createdAt is timestamp;
+    }
+
+    function isValidShopStatus(data) {
+      return data.keys().hasAll(['id', 'initialized', 'createdByUid', 'createdAt']) &&
+        data.keys().hasOnly(['id', 'initialized', 'createdByUid', 'createdAt']) &&
+        isValidId(data.id) &&
+        data.initialized == true &&
+        data.createdByUid == request.auth.uid &&
+        data.createdAt is timestamp;
+    }
+
+    // --- Collection Rules ---
+
+    match /shop_status/{statusId} {
+      allow get: if isValidId(statusId) && isVerified();
+      allow list: if false;
+      allow create: if isValidId(statusId) && statusId == 'default' && isVerified() &&
+        !exists(/databases/$(database)/documents/company/default) &&
+        isValidShopStatus(incoming()) &&
+        incoming().createdAt == request.time;
+      allow update: if false;
+      allow delete: if false;
+    }
+
+    match /company/{companyId} {
+      allow get: if isValidId(companyId) && isVerified();
+      allow list: if isVerified();
+      allow create: if isValidId(companyId) && companyId == 'default' && isVerified() &&
+        (isManager() || !exists(/databases/$(database)/documents/company/default)) &&
+        isValidCompany(incoming()) &&
+        incoming().updatedAt == request.time;
+      allow update: if isValidId(companyId) && companyId == 'default' && isManager() &&
+        isValidCompany(incoming()) &&
+        incoming().id == existing().id &&
+        incoming().updatedAt == request.time;
+      allow delete: if false;
+    }
+
+    match /staff/{staffId} {
+      allow get: if isValidId(staffId) && isVerified();
+      allow list: if isVerified();
+      allow create: if isValidId(staffId) && isVerified() &&
+        isValidStaff(incoming()) &&
+        incoming().id == staffId &&
+        incoming().createdByUid == request.auth.uid &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time &&
+        (isManager() || (!exists(/databases/$(database)/documents/company/default) && staffId == emailKey() && incoming().role == 'management' && incoming().active == true));
+      allow update: if isValidId(staffId) && isManager() &&
+        isValidStaff(incoming()) &&
+        incoming().id == existing().id &&
+        incoming().email == existing().email &&
+        incoming().createdByUid == existing().createdByUid &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['name', 'role', 'baySpecialty', 'active', 'updatedAt']);
+      allow delete: if false;
+    }
+
+    match /services/{serviceId} {
+      allow get: if isValidId(serviceId) && isVerified();
+      allow list: if isVerified();
+      allow create: if isValidId(serviceId) && isManager() &&
+        isValidService(incoming()) &&
+        incoming().id == serviceId &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time;
+      allow update: if isValidId(serviceId) && isManager() &&
+        isValidService(incoming()) &&
+        incoming().id == existing().id &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().updatedAt == request.time &&
+        incoming().diff(existing()).affectedKeys().hasOnly([
+          'name', 'category', 'description', 'unitPrice', 'taxable', 'active', 'updatedByUid', 'updatedAt'
+        ]);
+      allow delete: if false;
+    }
+
+    match /customers/{customerId} {
+      allow get: if isValidId(customerId) && isVerified();
+      allow list: if isVerified();
+      allow create: if isValidId(customerId) && isVerified() &&
+        isValidCustomer(incoming()) &&
+        incoming().id == customerId &&
+        incoming().createdByUid == request.auth.uid &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time;
+      allow update: if isValidId(customerId) && isVerified() &&
+        isValidCustomerUpdate(incoming()) &&
+        (!('id' in existing()) || incoming().id == existing().id) &&
+        (!('createdAt' in existing()) || incoming().createdAt == existing().createdAt) &&
+        incoming().updatedAt == request.time &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['name', 'phone', 'email', 'notes', 'updatedAt']);
+      allow delete: if false;
+    }
+
+    match /vehicles/{vehicleId} {
+      allow get: if isValidId(vehicleId) && isVerified();
+      allow list: if isVerified();
+      allow create: if isValidId(vehicleId) && isVerified() &&
+        isValidVehicle(incoming()) &&
+        incoming().id == vehicleId &&
+        incoming().createdByUid == request.auth.uid &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time;
+      allow update: if isValidId(vehicleId) && isVerified() &&
+        isValidVehicleUpdate(incoming()) &&
+        (!('id' in existing()) || incoming().id == existing().id) &&
+        (!('customerId' in existing()) || incoming().customerId == existing().customerId) &&
+        (!('createdAt' in existing()) || incoming().createdAt == existing().createdAt) &&
+        incoming().updatedAt == request.time &&
+        incoming().diff(existing()).affectedKeys().hasOnly([
+          'customerName', 'year', 'make', 'model', 'licensePlate', 'vin', 'mileage', 'updatedAt'
+        ]);
+      allow delete: if false;
+    }
+
+    match /work_orders/{workOrderId} {
+      allow get: if isValidId(workOrderId) && isVerified();
+      allow list: if isVerified();
+      allow create: if isValidId(workOrderId) && isVerified() &&
+        isValidWorkOrder(incoming()) &&
+        incoming().id == workOrderId &&
+        incoming().createdByUid == request.auth.uid &&
+        incoming().createdAt == request.time &&
+        incoming().updatedAt == request.time &&
+        (incoming().status in ['intake', 'in_progress', 'waiting_on_parts', 'ready']) &&
+        (incoming().discount == 0 || isManager()) &&
+        incoming().paymentMethod == 'none' &&
+        incoming().amountPaid == 0;
+
+      allow update: if isValidId(workOrderId) && isVerified() &&
+        isValidWorkOrderUpdate(incoming()) &&
+        (!('id' in existing()) || incoming().id == existing().id) &&
+        (!('createdAt' in existing()) || incoming().createdAt == existing().createdAt) &&
+        incoming().updatedAt == request.time &&
+        (!('status' in existing()) || existing().status != 'voided') && (
+          // Action 1: Any verified user progressing or updating an active (non-paid) work order;
+          // pricing-sensitive fields (discount, taxRate) and payment/void fields remain locked to management.
+          (
+            (!('status' in existing()) || existing().status != 'paid') &&
+            (incoming().status in ['intake', 'in_progress', 'waiting_on_parts', 'ready']) &&
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'status', 'assignedMechanicId', 'assignedMechanicName', 'notes', 'mileage',
+              'lineItems', 'subtotal', 'discount', 'taxRate', 'taxAmount', 'total',
+              'completedAt', 'completedByName', 'completedByUid', 'updatedAt'
+            ]) &&
+            (
+              !incoming().diff(existing()).affectedKeys().hasAny(['discount', 'taxRate']) ||
+              isManager()
+            )
+          ) ||
+          // Action 2: Management Mark Active Order as Paid (cash/card + amount)
+          (
+            (!('status' in existing()) || existing().status != 'paid') &&
+            incoming().status == 'paid' &&
+            (incoming().paymentMethod in ['cash', 'card']) &&
+            incoming().paidByUid == request.auth.uid &&
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'status', 'paymentMethod', 'amountPaid', 'paidAt', 'paidByName', 'paidByUid',
+              'completedAt', 'completedByName', 'completedByUid', 'updatedAt'
+            ]) &&
+            isManager()
+          ) ||
+          // Action 3: Management Void a Paid Order (paid orders cannot be edited, only voided with a note)
+          (
+            existing().status == 'paid' &&
+            incoming().status == 'voided' &&
+            isValidReqString(incoming().voidReason, 3, 400) &&
+            incoming().voidedByUid == request.auth.uid &&
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'status', 'voidReason', 'voidedAt', 'voidedByName', 'voidedByUid', 'updatedAt'
+            ]) &&
+            isManager()
+          )
+        );
+
+      allow delete: if false;
+
+      match /audit_log/{logId} {
+        allow get: if isValidId(workOrderId) && isValidId(logId) && isVerified();
+        allow list: if isValidId(workOrderId) && isVerified();
+        allow create: if isValidId(workOrderId) && isValidId(logId) && isVerified() &&
+          isValidWorkOrderAudit(incoming()) &&
+          incoming().id == logId &&
+          incoming().workOrderId == workOrderId &&
+          incoming().createdAt == request.time;
+        allow update: if false;
+        allow delete: if false;
+      }
+    }
+
+    match /price_audit_log/{logId} {
+      allow get: if isValidId(logId) && isVerified();
+      allow list: if isVerified();
+      allow create: if isValidId(logId) && isManager() &&
+        isValidPriceAudit(incoming()) &&
+        incoming().id == logId &&
+        incoming().createdAt == request.time;
+      allow update: if false;
+      allow delete: if false;
+    }
+
+    match /staff_notifications/{notificationId} {
+      allow get: if isValidId(notificationId) && isVerified();
+      allow list: if isVerified();
+      allow create: if isValidId(notificationId) && isVerified() &&
+        isValidStaffNotification(incoming()) &&
+        incoming().id == notificationId &&
+        incoming().createdByUid == request.auth.uid &&
+        incoming().createdAt == request.time;
+      allow update: if isValidId(notificationId) && isVerified() &&
+        isValidStaffNotification(incoming()) &&
+        incoming().id == existing().id &&
+        incoming().createdByUid == existing().createdByUid &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['readByUids']);
+      allow delete: if false;
+    }
+  }
+}

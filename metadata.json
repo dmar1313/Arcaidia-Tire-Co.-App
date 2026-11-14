@@ -1,0 +1,6 @@
+{
+  "name": "TreadLine — Tire & Auto Shop Manager",
+  "description": "Offline-first tire and auto shop PWA for fixed-price service catalogs, work orders, Iowa sales tax, PDF receipts, staff bay alerts, and Tekmetric CSV exports.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
