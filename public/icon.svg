@@ -1,10 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
   <rect width="512" height="512" rx="96" fill="#0F172A"/>
-  <circle cx="256" cy="256" r="148" stroke="#F8FAFC" stroke-width="34"/>
-  <circle cx="256" cy="256" r="68" stroke="#EA580C" stroke-width="26"/>
-  <circle cx="256" cy="256" r="20" fill="#F8FAFC"/>
-  <line x1="256" y1="76" x2="256" y2="124" stroke="#0F172A" stroke-width="14" stroke-linecap="round"/>
-  <line x1="256" y1="388" x2="256" y2="436" stroke="#0F172A" stroke-width="14" stroke-linecap="round"/>
-  <line x1="76" y1="256" x2="124" y2="256" stroke="#0F172A" stroke-width="14" stroke-linecap="round"/>
-  <line x1="388" y1="256" x2="436" y2="256" stroke="#0F172A" stroke-width="14" stroke-linecap="round"/>
+  <rect x="56" y="56" width="400" height="400" rx="48" fill="#FFFFFF"/>
+  <path d="M186 316 L226 196 L266 316 L246 316 L226 262 L206 316 Z" fill="#0F172A"/>
+  <path d="M226 292 L212 330 L240 330 Z" fill="#C81E2B"/>
+  <text x="256" y="372" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="52" font-weight="900" letter-spacing="4" fill="#0F172A">ARCADIA</text>
+  <text x="256" y="410" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="28" font-weight="700" letter-spacing="6" fill="#C81E2B">TIRE CO.</text>
 </svg>
