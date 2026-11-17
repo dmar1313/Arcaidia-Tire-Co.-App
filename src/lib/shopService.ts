@@ -1,6 +1,7 @@
 import {
   collection,
   doc,
+  increment,
   serverTimestamp,
   setDoc,
   updateDoc,
@@ -26,6 +27,8 @@ import type {
   ServiceCategory,
   StaffMember,
   StaffRole,
+  TireCondition,
+  TireInventoryItem,
   Vehicle,
   WorkOrder,
   WorkOrderLineItem,
@@ -153,7 +156,7 @@ export async function claimAndCreateShop(input: {
 
   batch.set(doc(db, 'staff', staffId), {
     id: staffId,
-    name: input.ownerName.trim().slice(0, 100) || 'Shop Owner',
+    name: ownerInfo.name.trim().slice(0, 100) || 'Shop Owner',
     email: cleanEmail,
     role: 'management',
     baySpecialty: 'Owner / Management',
@@ -338,6 +341,115 @@ export async function updateServiceCatalogItem(
     batch.commit(),
     OperationType.UPDATE,
     `services/${existing.id}`
+  );
+}
+
+// --- Tire inventory (`tires` collection) ---
+// Tires are stocked by size/brand/condition, NOT as prefabbed service items.
+// Writes are manager-only under Firestore rules; the UI also gates them.
+
+export async function createTire(
+  input: {
+    tireSize: string;
+    brand: string;
+    condition: TireCondition;
+    quantity: number;
+    unitPrice: number;
+    costPrice?: number;
+    binLocation?: string;
+    notes?: string;
+    active: boolean;
+  },
+  actor: ActorInfo
+): Promise<void> {
+  const id = makeSafeId('tir');
+  const path = `tires/${id}`;
+  const payload: Record<string, unknown> = {
+    id,
+    tireSize: input.tireSize.trim().slice(0, 20),
+    brand: input.brand.trim().slice(0, 80),
+    condition: input.condition,
+    quantity: Math.max(0, Math.floor(Number(input.quantity) || 0)),
+    unitPrice: Math.max(0, Math.min(50000, Number(input.unitPrice) || 0)),
+    active: input.active,
+    createdByUid: actor.uid,
+    createdByName: (actor.name || actor.email || 'Staff').trim().slice(0, 100),
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  };
+  if (input.costPrice !== undefined) {
+    payload.costPrice = Math.max(0, Number(input.costPrice) || 0);
+  }
+  if (input.binLocation) {
+    payload.binLocation = input.binLocation.trim().slice(0, 60);
+  }
+  if (input.notes) {
+    payload.notes = input.notes.trim().slice(0, 500);
+  }
+
+  await commitWithOfflineGrace(
+    setDoc(doc(db, 'tires', id), payload),
+    OperationType.CREATE,
+    path
+  );
+}
+
+export async function updateTire(
+  existing: TireInventoryItem,
+  input: {
+    tireSize: string;
+    brand: string;
+    condition: TireCondition;
+    quantity: number;
+    unitPrice: number;
+    costPrice?: number;
+    binLocation?: string;
+    notes?: string;
+    active: boolean;
+  },
+  actor: ActorInfo
+): Promise<void> {
+  const updateData: Record<string, unknown> = {
+    tireSize: input.tireSize.trim().slice(0, 20),
+    brand: input.brand.trim().slice(0, 80),
+    condition: input.condition,
+    quantity: Math.max(0, Math.floor(Number(input.quantity) || 0)),
+    unitPrice: Math.max(0, Math.min(50000, Number(input.unitPrice) || 0)),
+    active: input.active,
+    updatedAt: serverTimestamp(),
+  };
+  if (input.costPrice !== undefined) {
+    updateData.costPrice = Math.max(0, Number(input.costPrice) || 0);
+  }
+  if (input.binLocation !== undefined) {
+    updateData.binLocation = input.binLocation.trim().slice(0, 60);
+  }
+  if (input.notes !== undefined) {
+    updateData.notes = input.notes.trim().slice(0, 500);
+  }
+
+  await commitWithOfflineGrace(
+    updateDoc(doc(db, 'tires', existing.id), updateData),
+    OperationType.UPDATE,
+    `tires/${existing.id}`
+  );
+}
+
+export async function adjustTireQuantity(
+  existing: TireInventoryItem,
+  delta: number,
+  actor: ActorInfo
+): Promise<void> {
+  // Quick +/- stock buttons in the Tires view. Clamped at 0 here; the rules
+  // allow any int quantity so a payment can never fail on an oversell race.
+  const next = Math.max(0, (existing.quantity || 0) + delta);
+  await commitWithOfflineGrace(
+    updateDoc(doc(db, 'tires', existing.id), {
+      quantity: next,
+      updatedAt: serverTimestamp(),
+    }),
+    OperationType.UPDATE,
+    `tires/${existing.id}`
   );
 }
 
@@ -601,6 +713,8 @@ export async function createWorkOrderAtomic(
     qty: Math.max(1, Number(item.qty) || 1),
     unitPrice: Math.max(0, Number(item.unitPrice) || 0),
     taxable: Boolean(item.taxable),
+    ...(item.tireId ? { tireId: String(item.tireId).slice(0, 128) } : {}),
+    ...(item.isTireSale ? { isTireSale: true } : {}),
   }));
   const safeSubtotal = Math.max(0, Number.isFinite(Number(payload.subtotal)) ? Number(payload.subtotal) : 0);
   const safeDiscount =
@@ -745,6 +859,8 @@ export async function updateActiveWorkOrder(
     qty: Math.max(1, Number(item.qty) || 1),
     unitPrice: Math.max(0, Number(item.unitPrice) || 0),
     taxable: Boolean(item.taxable),
+    ...(item.tireId ? { tireId: String(item.tireId).slice(0, 128) } : {}),
+    ...(item.isTireSale ? { isTireSale: true } : {}),
   }));
   const safeSubtotal = Math.max(0, Number.isFinite(Number(updates.subtotal)) ? Number(updates.subtotal) : 0);
   const safeTaxAmount = Math.max(0, Number.isFinite(Number(updates.taxAmount)) ? Number(updates.taxAmount) : 0);
@@ -981,6 +1097,20 @@ export async function markWorkOrderPaid(
     createdAt: serverTimestamp(),
   });
 
+  // Tire inventory: selling a tire deducts it from stock, in the same batch
+  // as the payment so the sale and the deduction commit together. Payment is
+  // the sale — nothing deducts at work-order creation or on status changes.
+  // increment() is atomic; a race that oversells the last tire can push
+  // quantity below 0 (visible in the Tires view) rather than failing payment.
+  for (const item of existing.lineItems || []) {
+    if (!item.isTireSale || !item.tireId) continue;
+    const qty = Math.max(1, Number(item.qty) || 1);
+    batch.update(doc(db, 'tires', item.tireId), {
+      quantity: increment(-qty),
+      updatedAt: serverTimestamp(),
+    });
+  }
+
   await commitWithOfflineGrace(
     batch.commit(),
     OperationType.UPDATE,
@@ -1026,6 +1156,16 @@ export async function voidPaidWorkOrder(
     actorRole: actor.role,
     createdAt: serverTimestamp(),
   });
+
+  // A voided paid order means the tires did NOT sell — put the stock back.
+  for (const item of existing.lineItems || []) {
+    if (!item.isTireSale || !item.tireId) continue;
+    const qty = Math.max(1, Number(item.qty) || 1);
+    batch.update(doc(db, 'tires', item.tireId), {
+      quantity: increment(qty),
+      updatedAt: serverTimestamp(),
+    });
+  }
 
   await commitWithOfflineGrace(
     batch.commit(),
