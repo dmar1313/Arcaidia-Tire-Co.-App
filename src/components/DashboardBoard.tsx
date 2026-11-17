@@ -243,7 +243,7 @@ export const DashboardBoard: React.FC<DashboardBoardProps> = ({
             src={COMPANY_LOGO_SRC}
             alt=""
             onError={() => setWatermarkFailed(true)}
-            className="w-[360px] sm:w-[500px] lg:w-[640px] max-w-[85vw] aspect-[2/1] object-cover object-[50%_52%] opacity-[0.12] mix-blend-multiply"
+            className="w-[360px] sm:w-[500px] lg:w-[640px] max-w-[85vw] aspect-[2/1] object-contain opacity-[0.12] mix-blend-multiply"
           />
         </div>
       )}
