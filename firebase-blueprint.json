@@ -60,6 +60,28 @@
       },
       "required": ["id", "name", "category", "unitPrice", "taxable", "active", "updatedByUid", "createdAt", "updatedAt"]
     },
+    "TireInventoryItem": {
+      "title": "TireInventoryItem",
+      "description": "Dedicated tire stock record, centered on tires instead of prefabbed service items. Sold via work orders; quantity auto-deducts on payment and restores on void.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "tireSize": { "type": "string", "minLength": 1, "maxLength": 20 },
+        "brand": { "type": "string", "maxLength": 80 },
+        "condition": { "type": "string", "enum": ["new", "used"] },
+        "quantity": { "type": "number" },
+        "unitPrice": { "type": "number" },
+        "costPrice": { "type": "number" },
+        "binLocation": { "type": "string", "maxLength": 60 },
+        "notes": { "type": "string", "maxLength": 500 },
+        "active": { "type": "boolean" },
+        "createdByUid": { "type": "string", "maxLength": 128 },
+        "createdByName": { "type": "string", "maxLength": 100 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "tireSize", "condition", "quantity", "unitPrice", "active", "createdAt", "updatedAt"]
+    },
     "Customer": {
       "title": "Customer",
       "description": "Shop customer contact record.",
