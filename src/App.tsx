@@ -21,6 +21,7 @@ import {
   Clock,
   Eye,
   LayoutDashboard,
+  LifeBuoy,
   LogOut,
   Plus,
   ShieldCheck,
@@ -36,6 +37,7 @@ import { DashboardBoard } from './components/DashboardBoard';
 import { OfflineIndicator } from './components/OfflineIndicator';
 import { PriceListView } from './components/PriceListView';
 import { PWAInstallButton } from './components/PWAInstallButton';
+import { TiresView } from './components/TiresView';
 import { WorkOrderModal } from './components/WorkOrderModal';
 import {
   auth,
@@ -69,12 +71,13 @@ import {
   type StaffMember,
   type StaffNotification,
   type StaffRole,
+  type TireInventoryItem,
   type Vehicle,
   type WorkOrder,
   type WorkOrderStatus,
 } from './types';
 
-type NavTab = 'board' | 'orders' | 'customers' | 'prices' | 'company';
+type NavTab = 'board' | 'orders' | 'customers' | 'prices' | 'tires' | 'company';
 
 class AppErrorBoundary extends React.Component<
   { children: React.ReactNode },
@@ -132,6 +135,7 @@ function ShopWorkspace() {
   const [company, setCompany] = useState<CompanyProfile | null>(null);
   const [staff, setStaff] = useState<StaffMember[]>([]);
   const [services, setServices] = useState<ServiceCatalogItem[]>([]);
+  const [tires, setTires] = useState<TireInventoryItem[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [workOrders, setWorkOrders] = useState<WorkOrder[]>([]);
@@ -279,6 +283,14 @@ function ShopWorkspace() {
         query(collection(db, 'services'), orderBy('name', 'asc')),
         (snap) => setServices(snap.docs.map((d) => d.data() as ServiceCatalogItem)),
         (err) => handleFirestoreError(err, OperationType.LIST, 'services')
+      )
+    );
+
+    unsubs.push(
+      onSnapshot(
+        query(collection(db, 'tires'), orderBy('tireSize', 'asc')),
+        (snap) => setTires(snap.docs.map((d) => d.data() as TireInventoryItem)),
+        (err) => handleFirestoreError(err, OperationType.LIST, 'tires')
       )
     );
 
@@ -514,6 +526,12 @@ function ShopWorkspace() {
       label: isMechanicView ? 'Price List (Locked)' : 'Price List',
       shortLabel: 'Prices',
       icon: <Tag className="h-4 w-4" />,
+    },
+    {
+      id: 'tires',
+      label: 'Tires',
+      shortLabel: 'Tires',
+      icon: <LifeBuoy className="h-4 w-4" />,
     },
     ...(!isMechanicView
       ? [
@@ -1043,6 +1061,14 @@ function ShopWorkspace() {
             />
           )}
 
+          {effectiveTab === 'tires' && (
+            <TiresView
+              tires={tires}
+              effectiveRole={effectiveRole}
+              actor={actor}
+            />
+          )}
+
           {effectiveTab === 'company' && !isMechanicView && (
             <CompanyStaffExportsView
               company={company}
@@ -1067,11 +1093,11 @@ function ShopWorkspace() {
       {/* Mobile Fixed Bottom Navigation (4 concise destinations, >= 44px hitboxes + safe-area inset) */}
       <nav
         aria-label="Mobile Navigation"
-        className="md:hidden fixed bottom-0 left-0 right-0 z-30 bg-[#0F0F10] border-t border-neutral-800 grid grid-cols-4 pb-safe"
+        className="md:hidden fixed bottom-0 left-0 right-0 z-30 bg-[#0F0F10] border-t border-neutral-800 grid grid-cols-5 pb-safe"
       >
         {(isMechanicView
-          ? [navItems[0], navItems[1], navItems[2], navItems[3]]
-          : [navItems[0], navItems[2], navItems[3], navItems[4]]
+          ? [navItems[0], navItems[1], navItems[2], navItems[4], navItems[3]]
+          : [navItems[0], navItems[2], navItems[4], navItems[3], navItems[5]]
         ).map((item) => {
           const active =
             effectiveTab === item.id ||
@@ -1101,6 +1127,7 @@ function ShopWorkspace() {
           customers={customers}
           vehicles={vehicles}
           services={services}
+          tires={tires}
           company={company}
           actor={actor}
           effectiveRole={effectiveRole}
