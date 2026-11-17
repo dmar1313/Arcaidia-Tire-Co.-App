@@ -61,6 +61,11 @@ export interface ServiceCatalogItem {
   unitPrice: number;
   taxable: boolean;
   active: boolean;
+  stockQuantity?: number;
+  tireSize?: string;
+  brand?: string;
+  binLocation?: string;
+  costPrice?: number;
   updatedByUid: string;
   createdAt?: unknown;
   updatedAt?: unknown;

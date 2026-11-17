@@ -218,7 +218,8 @@ export function buildReceiptPdfDoc(wo: WorkOrder, company: CompanyProfile | null
   }
 
   doc.setTextColor(71, 85, 105);
-  doc.text(`Iowa Sales Tax (${wo.taxRate.toFixed(2)}%)`, labelX, y);
+  const displayTaxRate = wo.taxRate <= 1 && wo.taxRate > 0 ? wo.taxRate * 100 : wo.taxRate || 0;
+  doc.text(`Iowa Sales Tax (${displayTaxRate.toFixed(2)}%)`, labelX, y);
   doc.setTextColor(15, 23, 42);
   doc.text(formatCurrency(wo.taxAmount), valX, y, { align: 'right' });
   y += 10;
@@ -368,7 +369,7 @@ export function buildReceiptEmailHref(wo: WorkOrder, company: CompanyProfile | n
     '',
     `Subtotal: ${formatCurrency(wo.subtotal)}`,
     ...(wo.discount > 0 ? [`Discount: -${formatCurrency(wo.discount)}`] : []),
-    `Iowa Sales Tax (${wo.taxRate.toFixed(2)}%): ${formatCurrency(wo.taxAmount)}`,
+    `Iowa Sales Tax (${(wo.taxRate <= 1 && wo.taxRate > 0 ? wo.taxRate * 100 : wo.taxRate || 0).toFixed(2)}%): ${formatCurrency(wo.taxAmount)}`,
     `Total: ${formatCurrency(wo.total)}`,
     ...(wo.status === 'paid'
       ? [

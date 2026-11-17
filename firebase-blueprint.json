@@ -49,6 +49,11 @@
         "unitPrice": { "type": "number" },
         "taxable": { "type": "boolean" },
         "active": { "type": "boolean" },
+        "stockQuantity": { "type": "number" },
+        "tireSize": { "type": "string", "maxLength": 60 },
+        "brand": { "type": "string", "maxLength": 80 },
+        "binLocation": { "type": "string", "maxLength": 60 },
+        "costPrice": { "type": "number" },
         "updatedByUid": { "type": "string", "maxLength": 128 },
         "createdAt": { "type": "string", "format": "date-time" },
         "updatedAt": { "type": "string", "format": "date-time" }

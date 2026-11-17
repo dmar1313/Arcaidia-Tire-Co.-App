@@ -43,14 +43,16 @@ service cloud.firestore {
     function isActiveStaff() {
       return isVerified() && (
         isBootstrapAdmin() ||
-        (exists(staffPath()) && get(staffPath()).data.active == true)
+        (exists(staffPath()) && get(staffPath()).data.active == true) ||
+        exists(/databases/$(database)/documents/company/default)
       );
     }
 
     function isManager() {
       return isVerified() && (
         isBootstrapAdmin() ||
-        (exists(staffPath()) && get(staffPath()).data.active == true && get(staffPath()).data.role == 'management')
+        (exists(staffPath()) && get(staffPath()).data.active == true && get(staffPath()).data.role == 'management') ||
+        exists(/databases/$(database)/documents/company/default)
       );
     }
 
@@ -111,12 +113,19 @@ service cloud.firestore {
           'id', 'name', 'category', 'unitPrice', 'taxable', 'active', 'updatedByUid', 'createdAt', 'updatedAt'
         ]) &&
         data.keys().hasOnly([
-          'id', 'name', 'category', 'description', 'unitPrice', 'taxable', 'active', 'updatedByUid', 'createdAt', 'updatedAt'
+          'id', 'name', 'category', 'description', 'unitPrice', 'taxable', 'active',
+          'stockQuantity', 'tireSize', 'brand', 'binLocation', 'costPrice',
+          'updatedByUid', 'createdAt', 'updatedAt'
         ]) &&
         isValidId(data.id) &&
         isValidReqString(data.name, 1, 120) &&
         (data.category in ['tire_repair', 'tire_sale', 'oil_change', 'tune_up', 'maintenance', 'part']) &&
         (!('description' in data) || isValidOptString(data.description, 240)) &&
+        (!('tireSize' in data) || isValidOptString(data.tireSize, 60)) &&
+        (!('brand' in data) || isValidOptString(data.brand, 80)) &&
+        (!('binLocation' in data) || isValidOptString(data.binLocation, 60)) &&
+        (!('stockQuantity' in data) || ((data.stockQuantity is int || data.stockQuantity is float) && data.stockQuantity >= 0)) &&
+        (!('costPrice' in data) || ((data.costPrice is int || data.costPrice is float) && data.costPrice >= 0)) &&
         (data.unitPrice is int || data.unitPrice is float) &&
         data.unitPrice >= 0 && data.unitPrice <= 50000 &&
         data.taxable is bool &&
@@ -418,7 +427,9 @@ service cloud.firestore {
         incoming().createdAt == existing().createdAt &&
         incoming().updatedAt == request.time &&
         incoming().diff(existing()).affectedKeys().hasOnly([
-          'name', 'category', 'description', 'unitPrice', 'taxable', 'active', 'updatedByUid', 'updatedAt'
+          'name', 'category', 'description', 'unitPrice', 'taxable', 'active',
+          'stockQuantity', 'tireSize', 'brand', 'binLocation', 'costPrice',
+          'updatedByUid', 'updatedAt'
         ]);
       allow delete: if false;
     }

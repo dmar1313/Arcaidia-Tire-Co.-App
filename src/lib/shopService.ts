@@ -224,24 +224,47 @@ export async function createServiceCatalogItem(
     unitPrice: number;
     taxable: boolean;
     active: boolean;
+    stockQuantity?: number;
+    tireSize?: string;
+    brand?: string;
+    binLocation?: string;
+    costPrice?: number;
   },
   actor: ActorInfo
 ): Promise<void> {
   const id = makeSafeId('svc');
   const path = `services/${id}`;
+  const payload: Record<string, unknown> = {
+    id,
+    name: input.name.trim().slice(0, 120),
+    category: input.category,
+    description: input.description.trim().slice(0, 240),
+    unitPrice: Math.max(0, Math.min(50000, Number(input.unitPrice) || 0)),
+    taxable: input.taxable,
+    active: input.active,
+    updatedByUid: actor.uid,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  };
+
+  if (input.stockQuantity !== undefined) {
+    payload.stockQuantity = Math.max(0, Math.floor(Number(input.stockQuantity) || 0));
+  }
+  if (input.tireSize) {
+    payload.tireSize = input.tireSize.trim().slice(0, 60);
+  }
+  if (input.brand) {
+    payload.brand = input.brand.trim().slice(0, 80);
+  }
+  if (input.binLocation) {
+    payload.binLocation = input.binLocation.trim().slice(0, 60);
+  }
+  if (input.costPrice !== undefined) {
+    payload.costPrice = Math.max(0, Number(input.costPrice) || 0);
+  }
+
   await commitWithOfflineGrace(
-    setDoc(doc(db, 'services', id), {
-      id,
-      name: input.name.trim().slice(0, 120),
-      category: input.category,
-      description: input.description.trim().slice(0, 240),
-      unitPrice: Math.max(0, Math.min(50000, Number(input.unitPrice) || 0)),
-      taxable: input.taxable,
-      active: input.active,
-      updatedByUid: actor.uid,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    }),
+    setDoc(doc(db, 'services', id), payload),
     OperationType.CREATE,
     path
   );
@@ -256,6 +279,11 @@ export async function updateServiceCatalogItem(
     unitPrice: number;
     taxable: boolean;
     active: boolean;
+    stockQuantity?: number;
+    tireSize?: string;
+    brand?: string;
+    binLocation?: string;
+    costPrice?: number;
   },
   actor: ActorInfo
 ): Promise<void> {
@@ -263,7 +291,7 @@ export async function updateServiceCatalogItem(
   const batch = writeBatch(db);
   const serviceRef = doc(db, 'services', existing.id);
 
-  batch.update(serviceRef, {
+  const updateData: Record<string, unknown> = {
     name: input.name.trim().slice(0, 120),
     category: input.category,
     description: input.description.trim().slice(0, 240),
@@ -272,7 +300,25 @@ export async function updateServiceCatalogItem(
     active: input.active,
     updatedByUid: actor.uid,
     updatedAt: serverTimestamp(),
-  });
+  };
+
+  if (input.stockQuantity !== undefined) {
+    updateData.stockQuantity = Math.max(0, Math.floor(Number(input.stockQuantity) || 0));
+  }
+  if (input.tireSize !== undefined) {
+    updateData.tireSize = input.tireSize.trim().slice(0, 60);
+  }
+  if (input.brand !== undefined) {
+    updateData.brand = input.brand.trim().slice(0, 80);
+  }
+  if (input.binLocation !== undefined) {
+    updateData.binLocation = input.binLocation.trim().slice(0, 60);
+  }
+  if (input.costPrice !== undefined) {
+    updateData.costPrice = Math.max(0, Number(input.costPrice) || 0);
+  }
+
+  batch.update(serviceRef, updateData);
 
   if (Math.abs(newPrice - existing.unitPrice) > 0.001) {
     const logId = makeSafeId('pa');
@@ -561,7 +607,10 @@ export async function createWorkOrderAtomic(
     actor.role === 'management'
       ? Math.max(0, Math.min(safeSubtotal, Number.isFinite(Number(payload.discount)) ? Number(payload.discount) : 0))
       : 0;
-  const safeTaxRate = Math.max(0, Math.min(25, Number.isFinite(Number(payload.taxRate)) ? Number(payload.taxRate) : 0));
+  const rawTaxRate = Number.isFinite(Number(payload.taxRate)) ? Number(payload.taxRate) : 7.0;
+  // Normalize taxRate to fraction (e.g. 7.0 -> 0.07) so it satisfies live rules expecting 0 to 1,
+  // while also remaining valid under rules accepting <= 25.
+  const safeTaxRate = rawTaxRate > 1 ? Number((rawTaxRate / 100).toFixed(4)) : Math.max(0, rawTaxRate);
   const safeTaxAmount = Math.max(0, Number.isFinite(Number(payload.taxAmount)) ? Number(payload.taxAmount) : 0);
   const safeTotal = Math.max(0, Number.isFinite(Number(payload.total)) ? Number(payload.total) : 0);
   const nowIso = new Date().toISOString();
@@ -735,10 +784,8 @@ export async function updateActiveWorkOrder(
         Number.isFinite(Number(updates.discount)) ? Number(updates.discount) : 0
       )
     );
-    updatePayload.taxRate = Math.max(
-      0,
-      Math.min(25, Number.isFinite(Number(updates.taxRate)) ? Number(updates.taxRate) : 0)
-    );
+    const rawRate = Number.isFinite(Number(updates.taxRate)) ? Number(updates.taxRate) : 0;
+    updatePayload.taxRate = rawRate > 1 ? Number((rawRate / 100).toFixed(4)) : Math.max(0, rawRate);
   }
 
   await commitWithOfflineGrace(

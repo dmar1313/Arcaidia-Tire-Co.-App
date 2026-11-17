@@ -35,6 +35,10 @@ export const PriceListView: React.FC<PriceListViewProps> = ({
   const [category, setCategory] = useState<ServiceCategory>('tire_repair');
   const [description, setDescription] = useState('');
   const [unitPrice, setUnitPrice] = useState('0.00');
+  const [stockQuantity, setStockQuantity] = useState('');
+  const [tireSize, setTireSize] = useState('');
+  const [brand, setBrand] = useState('');
+  const [binLocation, setBinLocation] = useState('');
   const [taxable, setTaxable] = useState(true);
   const [active, setActive] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -45,9 +49,13 @@ export const PriceListView: React.FC<PriceListViewProps> = ({
     setEditing(item);
     if (item === 'new') {
       setName('');
-      setCategory('tire_repair');
+      setCategory('tire_sale');
       setDescription('');
       setUnitPrice('');
+      setStockQuantity('');
+      setTireSize('');
+      setBrand('');
+      setBinLocation('');
       setTaxable(true);
       setActive(true);
     } else {
@@ -55,6 +63,10 @@ export const PriceListView: React.FC<PriceListViewProps> = ({
       setCategory(item.category);
       setDescription(item.description || '');
       setUnitPrice(String(item.unitPrice));
+      setStockQuantity(item.stockQuantity !== undefined ? String(item.stockQuantity) : '');
+      setTireSize(item.tireSize || '');
+      setBrand(item.brand || '');
+      setBinLocation(item.binLocation || '');
       setTaxable(item.taxable);
       setActive(item.active);
     }
@@ -66,7 +78,7 @@ export const PriceListView: React.FC<PriceListViewProps> = ({
     setSaving(true);
     setErrorMsg(null);
     try {
-      const payload = {
+      const payload: Parameters<typeof createServiceCatalogItem>[0] = {
         name,
         category,
         description,
@@ -74,6 +86,20 @@ export const PriceListView: React.FC<PriceListViewProps> = ({
         taxable,
         active,
       };
+
+      if (stockQuantity.trim() !== '') {
+        payload.stockQuantity = Math.max(0, parseInt(stockQuantity, 10) || 0);
+      }
+      if (tireSize.trim() !== '') {
+        payload.tireSize = tireSize.trim();
+      }
+      if (brand.trim() !== '') {
+        payload.brand = brand.trim();
+      }
+      if (binLocation.trim() !== '') {
+        payload.binLocation = binLocation.trim();
+      }
+
       if (editing === 'new') {
         await createServiceCatalogItem(payload, actor);
       } else if (editing) {
@@ -164,6 +190,11 @@ export const PriceListView: React.FC<PriceListViewProps> = ({
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <p className="font-semibold text-sm text-slate-900">{svc.name}</p>
+                      {(svc.brand || svc.tireSize) && (
+                        <p className="text-xs font-medium text-slate-700 mt-0.5">
+                          {svc.brand} {svc.tireSize ? `(${svc.tireSize})` : ''}
+                        </p>
+                      )}
                       {svc.description && (
                         <p className="text-xs text-slate-500 mt-0.5">{svc.description}</p>
                       )}
@@ -175,6 +206,20 @@ export const PriceListView: React.FC<PriceListViewProps> = ({
                   <div className="flex items-center justify-between gap-2 text-xs">
                     <div className="flex flex-wrap items-center gap-2 text-slate-500">
                       <span>{SERVICE_CATEGORY_LABELS[svc.category]}</span>
+                      {svc.stockQuantity !== undefined && (
+                        <>
+                          <span>·</span>
+                          <span className={svc.stockQuantity > 0 ? 'text-emerald-700 font-semibold' : 'text-red-600 font-semibold'}>
+                            {svc.stockQuantity > 0 ? `${svc.stockQuantity} in stock` : 'Out of stock'}
+                          </span>
+                        </>
+                      )}
+                      {svc.binLocation && (
+                        <>
+                          <span>·</span>
+                          <span>Bin: {svc.binLocation}</span>
+                        </>
+                      )}
                       <span>·</span>
                       <span>{svc.taxable ? 'Iowa Taxable' : 'Exempt'}</span>
                       <span>·</span>
@@ -202,8 +247,9 @@ export const PriceListView: React.FC<PriceListViewProps> = ({
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="border-b border-slate-200 bg-slate-50/70 text-xs font-medium text-slate-500">
-                    <th className="py-2.5 px-4">Service / Item</th>
+                    <th className="py-2.5 px-4">Service / Tire Item</th>
                     <th className="py-2.5 px-4">Category</th>
+                    <th className="py-2.5 px-4">Inventory / Stock</th>
                     <th className="py-2.5 px-4">Tax</th>
                     <th className="py-2.5 px-4">Status</th>
                     <th className="py-2.5 px-4 text-right">Unit Price</th>
@@ -215,12 +261,35 @@ export const PriceListView: React.FC<PriceListViewProps> = ({
                     <tr key={svc.id} className="hover:bg-slate-50">
                       <td className="py-3 px-4">
                         <p className="font-medium text-slate-900">{svc.name}</p>
+                        {(svc.brand || svc.tireSize) && (
+                          <p className="text-xs font-semibold text-slate-700 mt-0.5">
+                            {svc.brand} {svc.tireSize ? `· Size: ${svc.tireSize}` : ''}
+                          </p>
+                        )}
                         {svc.description && (
                           <p className="text-xs text-slate-500 mt-0.5">{svc.description}</p>
                         )}
                       </td>
                       <td className="py-3 px-4 text-xs text-slate-600">
                         {SERVICE_CATEGORY_LABELS[svc.category]}
+                      </td>
+                      <td className="py-3 px-4 text-xs">
+                        {svc.stockQuantity !== undefined ? (
+                          <div className="space-y-0.5">
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold ${
+                              svc.stockQuantity > 0
+                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                : 'bg-red-50 text-red-700 border border-red-200'
+                            }`}>
+                              {svc.stockQuantity > 0 ? `${svc.stockQuantity} in stock` : 'Out of stock'}
+                            </span>
+                            {svc.binLocation && (
+                              <p className="text-[11px] text-slate-500">Loc: {svc.binLocation}</p>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-slate-400">—</span>
+                        )}
                       </td>
                       <td className="py-3 px-4 text-xs text-slate-600">
                         {svc.taxable ? 'Iowa Taxable' : 'Exempt'}
@@ -333,6 +402,40 @@ export const PriceListView: React.FC<PriceListViewProps> = ({
                   value={unitPrice}
                   onChange={(e) => setUnitPrice(e.target.value)}
                   className="px-3 py-2 text-base sm:text-sm border border-slate-200 rounded-lg font-mono"
+                />
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <input
+                  type="text"
+                  placeholder="Tire Size (e.g., 225/65R17)"
+                  value={tireSize}
+                  onChange={(e) => setTireSize(e.target.value)}
+                  className="px-3 py-2 text-base sm:text-sm border border-slate-200 rounded-lg"
+                />
+                <input
+                  type="text"
+                  placeholder="Brand (e.g., Michelin, Goodyear)"
+                  value={brand}
+                  onChange={(e) => setBrand(e.target.value)}
+                  className="px-3 py-2 text-base sm:text-sm border border-slate-200 rounded-lg"
+                />
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <input
+                  type="number"
+                  min={0}
+                  step="1"
+                  placeholder="In-Stock Quantity (e.g., 8)"
+                  value={stockQuantity}
+                  onChange={(e) => setStockQuantity(e.target.value)}
+                  className="px-3 py-2 text-base sm:text-sm border border-slate-200 rounded-lg font-mono"
+                />
+                <input
+                  type="text"
+                  placeholder="Bin / Rack Location (e.g., Rack 3B)"
+                  value={binLocation}
+                  onChange={(e) => setBinLocation(e.target.value)}
+                  className="px-3 py-2 text-base sm:text-sm border border-slate-200 rounded-lg"
                 />
               </div>
               <textarea

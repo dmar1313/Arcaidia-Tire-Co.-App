@@ -40,7 +40,8 @@ export function calculateWorkOrderTotals(
   // Proportionally reduce taxable base when a work-order discount is applied
   const discountRatio = subtotal > 0 ? discount / subtotal : 0;
   const taxableSubtotal = roundCents(Math.max(0, rawTaxable * (1 - discountRatio)));
-  const taxRate = Math.max(0, taxRatePercent || 0) / 100;
+  // Support both percent (e.g. 7.0) and fraction (e.g. 0.07)
+  const taxRate = taxRatePercent > 1 ? taxRatePercent / 100 : Math.max(0, taxRatePercent || 0);
   const taxAmount = roundCents(taxableSubtotal * taxRate);
   const total = roundCents(Math.max(0, subtotal - discount + taxAmount));
 

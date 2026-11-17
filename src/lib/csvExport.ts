@@ -130,7 +130,7 @@ export function exportWorkOrdersCsv(workOrders: WorkOrder[]): void {
     wo.lineItems.map((li) => `${li.qty}x ${li.name} ($${li.unitPrice.toFixed(2)})`).join(' | '),
     wo.subtotal.toFixed(2),
     wo.discount.toFixed(2),
-    wo.taxRate.toFixed(2),
+    (wo.taxRate <= 1 && wo.taxRate > 0 ? wo.taxRate * 100 : wo.taxRate || 0).toFixed(2),
     wo.taxAmount.toFixed(2),
     wo.total.toFixed(2),
     wo.paymentMethod,

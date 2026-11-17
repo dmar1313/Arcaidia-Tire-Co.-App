@@ -132,9 +132,10 @@ export const WorkOrderModal: React.FC<WorkOrderModalProps> = ({
     existingOrder?.lineItems || []
   );
   const [discount, setDiscount] = useState<number>(existingOrder?.discount || 0);
-  const [taxRate, setTaxRate] = useState<number>(
-    existingOrder?.taxRate ?? company?.iowaTaxRate ?? 7.0
-  );
+  const [taxRate, setTaxRate] = useState<number>(() => {
+    const raw = existingOrder?.taxRate ?? company?.iowaTaxRate ?? 7.0;
+    return raw <= 1 && raw > 0 ? Number((raw * 100).toFixed(2)) : raw;
+  });
 
   // Catalog picker filter
   const [catalogCategory, setCatalogCategory] = useState<'all' | ServiceCategory>('all');
@@ -167,7 +168,8 @@ export const WorkOrderModal: React.FC<WorkOrderModalProps> = ({
     if (existingOrder.status === 'paid' || existingOrder.status === 'voided') {
       setLineItems(existingOrder.lineItems || []);
       setDiscount(existingOrder.discount || 0);
-      setTaxRate(existingOrder.taxRate ?? 7.0);
+      const raw = existingOrder.taxRate ?? company?.iowaTaxRate ?? 7.0;
+      setTaxRate(raw <= 1 && raw > 0 ? Number((raw * 100).toFixed(2)) : raw);
       setMileage(existingOrder.mileage ?? 0);
       setNotes(existingOrder.notes || '');
       setShowPayPanel(false);
@@ -1075,8 +1077,14 @@ export const WorkOrderModal: React.FC<WorkOrderModalProps> = ({
                         >
                           <div className="min-w-0">
                             <p className="text-xs font-medium text-slate-900 truncate">{svc.name}</p>
-                            <p className="text-[11px] text-slate-500">
+                            <p className="text-[11px] text-slate-500 truncate">
                               {SERVICE_CATEGORY_LABELS[svc.category]}
+                              {svc.tireSize ? ` · ${svc.tireSize}` : ''}
+                              {svc.stockQuantity !== undefined ? (
+                                <span className={svc.stockQuantity > 0 ? " text-emerald-700 font-medium" : " text-amber-700 font-medium"}>
+                                  {` · ${svc.stockQuantity} in stock`}
+                                </span>
+                              ) : ''}
                             </p>
                           </div>
                           <span className="text-xs font-semibold font-mono tabular-nums text-slate-900 shrink-0">
