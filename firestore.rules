@@ -29,7 +29,11 @@ service cloud.firestore {
     }
 
     function emailKey() {
-      return request.auth.token.email.lower().replace('[^a-z0-9]','_');
+      return request.auth.token.email.lower()
+        .replace('@', '_')
+        .replace('.', '_')
+        .replace('+', '_')
+        .replace('-', '_');
     }
 
     function isBootstrapAdmin() {
@@ -40,13 +44,10 @@ service cloud.firestore {
       return /databases/$(database)/documents/staff/$(emailKey());
     }
 
-    // Team check: internal company app access
     function isActiveStaff() {
       return isVerified() && (
         isBootstrapAdmin() ||
-        (exists(staffPath()) && (get(staffPath()).data.active == true || get(staffPath()).data.isActive == true)) ||
-        exists(/databases/$(database)/documents/company/default) ||
-        exists(/databases/$(database)/documents/companies/default)
+        (exists(staffPath()) && (get(staffPath()).data.active == true || get(staffPath()).data.isActive == true))
       );
     }
 
@@ -54,9 +55,7 @@ service cloud.firestore {
       return isVerified() && (
         isBootstrapAdmin() ||
         (exists(staffPath()) && (get(staffPath()).data.active == true || get(staffPath()).data.isActive == true) &&
-         (get(staffPath()).data.role in ['management', 'owner'])) ||
-        exists(/databases/$(database)/documents/company/default) ||
-        exists(/databases/$(database)/documents/companies/default)
+         (get(staffPath()).data.role in ['management', 'owner']))
       );
     }
 
