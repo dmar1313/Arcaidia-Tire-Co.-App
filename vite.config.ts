@@ -11,7 +11,7 @@ export default defineConfig(() => {
       tailwindcss(),
       VitePWA({
         registerType: 'autoUpdate',
-        includeAssets: ['apple-touch-icon.png', 'icon.svg'],
+        includeAssets: ['apple-touch-icon.png', 'favicon-32x32.png', 'favicon-16x16.png'],
         manifest: {
           id: '/',
           name: 'Arcadia Tire Co. — Tire & Auto Shop Manager',
@@ -35,12 +35,6 @@ export default defineConfig(() => {
               sizes: '512x512',
               type: 'image/png',
               purpose: 'any',
-            },
-            {
-              src: '/pwa-maskable-512x512.png',
-              sizes: '512x512',
-              type: 'image/png',
-              purpose: 'maskable',
             },
           ],
         },
