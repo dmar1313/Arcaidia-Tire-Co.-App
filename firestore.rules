@@ -25,7 +25,7 @@ service cloud.firestore {
     }
 
     function isValidId(id) {
-      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+      return id is string && id.size() >= 1 && id.size() <= 128;
     }
 
     function emailKey() {
@@ -488,14 +488,11 @@ service cloud.firestore {
       allow list: if isVerified();
       allow create: if isValidId(workOrderId) && isVerified() &&
         isValidWorkOrder(incoming()) &&
-        incoming().id == workOrderId &&
-        incoming().createdAt == request.time &&
-        incoming().updatedAt == request.time;
+        incoming().id == workOrderId;
 
       allow update: if isValidId(workOrderId) && isVerified() &&
         isValidWorkOrderUpdate(incoming()) &&
-        incoming().id == existing().id &&
-        incoming().updatedAt == request.time;
+        incoming().id == existing().id;
 
       allow delete: if false;
 
