@@ -269,6 +269,10 @@
       "schema": { "$ref": "#/entities/ServiceCatalogItem" },
       "description": "Management-configured fixed price catalog for tires, oil changes, tune-ups, and parts."
     },
+    "/tires/{tireId}": {
+      "schema": { "$ref": "#/entities/TireInventoryItem" },
+      "description": "Dedicated tire stock records, sold via work orders; quantity auto-deducts on payment and restores on void."
+    },
     "/customers/{customerId}": {
       "schema": { "$ref": "#/entities/Customer" },
       "description": "Shop customer contact records."
