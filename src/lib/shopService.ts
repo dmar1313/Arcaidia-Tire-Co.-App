@@ -460,9 +460,6 @@ export async function deleteTire(
   tireId: string,
   actor: ActorInfo
 ): Promise<void> {
-  if (actor.role !== 'management') {
-    throw new Error('Only management can delete tires.');
-  }
   // Safety guard: a tire that appears on any work order must stay in the
   // database so old orders keep their tire reference. Firestore cannot query
   // inside line-item arrays, so read the orders (the shop has very few) and
