@@ -55,6 +55,7 @@ import {
   type ServiceCatalogItem,
   type ServiceCategory,
   type StaffRole,
+  type TireInventoryItem,
   type Vehicle,
   type WorkOrder,
   type WorkOrderAuditEntry,
@@ -69,6 +70,7 @@ interface WorkOrderModalProps {
   customers: Customer[];
   vehicles: Vehicle[];
   services: ServiceCatalogItem[];
+  tires: TireInventoryItem[];
   company: CompanyProfile | null;
   actor: ActorInfo;
   effectiveRole: StaffRole;
@@ -89,6 +91,7 @@ export const WorkOrderModal: React.FC<WorkOrderModalProps> = ({
   customers,
   vehicles,
   services,
+  tires,
   company,
   actor,
   effectiveRole,
@@ -140,6 +143,8 @@ export const WorkOrderModal: React.FC<WorkOrderModalProps> = ({
   // Catalog picker filter
   const [catalogCategory, setCatalogCategory] = useState<'all' | ServiceCategory>('all');
   const [catalogSearch, setCatalogSearch] = useState('');
+  const [pickerSource, setPickerSource] = useState<'services' | 'tires'>('services');
+  const [tireSearch, setTireSearch] = useState('');
 
   // Custom part form (management only for price override; mechanics use fixed catalog)
   const [customPartName, setCustomPartName] = useState('');
@@ -232,6 +237,60 @@ export const WorkOrderModal: React.FC<WorkOrderModalProps> = ({
     });
   }, [services, catalogCategory, catalogSearch]);
 
+  // Tires in stock, searchable by size/brand/bin — the "answer a caller fast"
+  // list. Out-of-stock tires stay visible (so the shop knows the size exists)
+  // but cannot be added to a work order.
+  const activeTires = useMemo(() => {
+    const q = tireSearch.trim().toLowerCase();
+    return tires
+      .filter((t) => t.active)
+      .filter((t) => {
+        if (!q) return true;
+        return `${t.tireSize} ${t.brand} ${t.binLocation || ''}`
+          .toLowerCase()
+          .includes(q);
+      })
+      .slice()
+      .sort((a, b) => {
+        const sizeCmp = (a.tireSize || '').localeCompare(b.tireSize || '');
+        if (sizeCmp !== 0) return sizeCmp;
+        return (a.brand || '').localeCompare(b.brand || '');
+      });
+  }, [tires, tireSearch]);
+
+  const tireDisplayName = (t: TireInventoryItem) =>
+    `${t.tireSize}${t.brand ? ` ${t.brand}` : ''} (${t.condition === 'new' ? 'New' : 'Used'})`;
+
+  const addTireItem = (tire: TireInventoryItem) => {
+    if (isPaidOrVoided || tire.quantity <= 0) return;
+    setLineItems((prev) => {
+      const existingIdx = prev.findIndex(
+        (li) => li.isTireSale && li.tireId === tire.id
+      );
+      if (existingIdx >= 0) {
+        return prev.map((li, idx) =>
+          idx === existingIdx ? { ...li, qty: li.qty + 1 } : li
+        );
+      }
+      if (prev.length >= 30) return prev;
+      return [
+        ...prev,
+        {
+          id: makeSafeId('li'),
+          serviceId: tire.id,
+          tireId: tire.id,
+          name: tireDisplayName(tire),
+          category: 'tire_sale' as ServiceCategory,
+          isCatalogService: false,
+          isTireSale: true,
+          qty: 1,
+          unitPrice: tire.unitPrice,
+          taxable: true,
+        },
+      ];
+    });
+  };
+
   const addCatalogItem = (svc: ServiceCatalogItem) => {
     if (isPaidOrVoided) return;
     setLineItems((prev) => {
@@ -318,6 +377,17 @@ export const WorkOrderModal: React.FC<WorkOrderModalProps> = ({
               unitPrice: origItem.unitPrice,
               taxable: origItem.taxable,
             };
+          }
+          // Tire line items: lock the price to the tire record, same as catalog.
+          if (li.isTireSale && li.tireId) {
+            const tireItem = tires.find((t) => t.id === li.tireId);
+            if (tireItem) {
+              return {
+                ...li,
+                unitPrice: tireItem.unitPrice,
+                taxable: true,
+              };
+            }
           }
           const catalogItem = services.find((svc) => svc.id === li.serviceId);
           if (catalogItem) {
@@ -1020,20 +1090,41 @@ export const WorkOrderModal: React.FC<WorkOrderModalProps> = ({
                 )}
               </div>
 
-              {/* Service Catalog Quick-Add */}
+              {/* Service & Tire Quick-Add */}
               {!isPaidOrVoided && (
                 <div className="border border-slate-200 rounded-xl p-3.5 sm:p-4 space-y-3">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                     <div>
                       <h3 className="text-xs font-semibold text-slate-900">
-                        Add Services &amp; Tires from Price List
+                        Add Services &amp; Tires
                       </h3>
                       <p className="text-[11px] text-slate-500">
                         {isManagerView
-                          ? 'Click to add catalog items or add custom parts below.'
-                          : 'Click to add services. Catalog prices are locked by management.'}
+                          ? 'Pick tires from stock or catalog services. Custom parts below.'
+                          : 'Pick tires from stock or catalog services. Prices are locked by management.'}
                       </p>
                     </div>
+                    <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-lg self-start sm:self-auto">
+                      {(['services', 'tires'] as const).map((src) => (
+                        <button
+                          key={src}
+                          type="button"
+                          onClick={() => setPickerSource(src)}
+                          className={`px-3 py-1.5 text-xs font-medium rounded-md whitespace-nowrap ${
+                            pickerSource === src
+                              ? 'bg-slate-900 text-white'
+                              : 'text-slate-600 hover:text-slate-900'
+                          }`}
+                        >
+                          {src === 'services' ? 'Services' : 'Tires in Stock'}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {pickerSource === 'services' && (
+                    <div className="space-y-3">
+                  <div className="flex items-center justify-between gap-2">
                     <input
                       type="search"
                       value={catalogSearch}
@@ -1134,6 +1225,59 @@ export const WorkOrderModal: React.FC<WorkOrderModalProps> = ({
                       </div>
                     </div>
                   )}
+                    </div>
+                  )}
+                  {pickerSource === 'tires' && (
+                    <div className="space-y-3">
+                      <input
+                        type="search"
+                        value={tireSearch}
+                        onChange={(e) => setTireSearch(e.target.value)}
+                        placeholder="Search tires by size, brand, or bin… (e.g. 225)"
+                        className="px-3 py-2 sm:py-1.5 text-base sm:text-xs border border-slate-200 rounded-lg bg-slate-50 focus:bg-white sm:w-64"
+                      />
+                      {activeTires.length === 0 ? (
+                        <p className="text-xs text-slate-500 py-2">
+                          No matching tires in stock. Management can add tires in the Tires tab.
+                        </p>
+                      ) : (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 max-h-48 overflow-y-auto pr-1">
+                          {activeTires.map((tire) => (
+                            <button
+                              key={tire.id}
+                              type="button"
+                              disabled={tire.quantity <= 0}
+                              onClick={() => addTireItem(tire)}
+                              className="text-left p-2.5 rounded-lg border border-slate-200 hover:border-slate-400 hover:bg-slate-50 transition-colors flex items-center justify-between gap-2 min-h-[44px] disabled:opacity-50 disabled:hover:border-slate-200 disabled:hover:bg-white"
+                            >
+                              <div className="min-w-0">
+                                <p className="text-xs font-medium text-slate-900 truncate">
+                                  {tireDisplayName(tire)}
+                                </p>
+                                <p className="text-[11px] text-slate-500 truncate">
+                                  {tire.quantity > 0 ? (
+                                    <span className="text-emerald-700 font-medium">
+                                      {`${tire.quantity} in stock`}
+                                    </span>
+                                  ) : (
+                                    <span className="text-red-600 font-medium">Out of stock</span>
+                                  )}
+                                  {tire.binLocation ? ` · ${tire.binLocation}` : ''}
+                                </p>
+                              </div>
+                              <span className="text-xs font-semibold font-mono tabular-nums text-slate-900 shrink-0">
+                                {formatCurrency(tire.unitPrice)}
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      <p className="text-[11px] text-slate-500">
+                        Tire price comes from the tire record. When the work order is marked paid,
+                        sold tires are deducted from stock.
+                      </p>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -1162,6 +1306,11 @@ export const WorkOrderModal: React.FC<WorkOrderModalProps> = ({
                         <div className="min-w-0 flex-1">
                           <p className="font-medium text-slate-900 text-xs sm:text-sm truncate">
                             {item.name}
+                            {item.isTireSale && (
+                              <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 align-middle">
+                                Tire
+                              </span>
+                            )}
                           </p>
                           <p className="text-[11px] text-slate-500">
                             {SERVICE_CATEGORY_LABELS[item.category]} ·{' '}
