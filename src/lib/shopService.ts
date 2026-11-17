@@ -9,6 +9,7 @@ import {
   updateDoc,
   writeBatch,
 } from 'firebase/firestore';
+import type { WriteBatch } from 'firebase/firestore';
 import {
   auth,
   db,
@@ -600,6 +601,61 @@ export interface CreateWorkOrderPayload {
   workOrderPrefix: string;
 }
 
+// ---------------------------------------------------------------------------
+// Tire stock reservation (reserve-on-attach)
+// A tire attached to a work order is spoken for the moment the order is
+// created or the line is added — the Tires count drops immediately so phone
+// answers never promise a tire that is already promised to a customer.
+// Paying deducts NOTHING (the reservation already happened at attach);
+// voiding, or removing the tire line from an active order, releases it.
+// Deltas are always computed as a DIFF of the order's tire lines
+// before/after each mutation, so no path can double-deduct or lose a restore:
+//   create:  reserve every tire line on the new order (atomic with the order)
+//   edit:    oldQty - newQty per tire (negative = reserve more, positive = release)
+//   pay:     no stock change
+//   void:    release every tire line still on the order
+// increment() is atomic and the rules put no lower bound on quantity, so a
+// reservation racing the last tire can push quantity below 0 instead of
+// failing the order write.
+// ---------------------------------------------------------------------------
+
+function tireLineQuantities(items: WorkOrderLineItem[]): Map<string, number> {
+  const out = new Map<string, number>();
+  for (const item of items || []) {
+    if (!item.isTireSale || !item.tireId) continue;
+    const qty = Math.max(1, Number(item.qty) || 1);
+    out.set(item.tireId, (out.get(item.tireId) || 0) + qty);
+  }
+  return out;
+}
+
+function tireLineDiffDeltas(
+  oldItems: WorkOrderLineItem[],
+  newItems: WorkOrderLineItem[]
+): Map<string, number> {
+  const deltas = new Map<string, number>();
+  const oldQtys = tireLineQuantities(oldItems);
+  const newQtys = tireLineQuantities(newItems);
+  for (const [tireId, oldQty] of oldQtys) {
+    const nextQty = newQtys.get(tireId) || 0;
+    if (oldQty !== nextQty) deltas.set(tireId, oldQty - nextQty);
+  }
+  for (const [tireId, nextQty] of newQtys) {
+    if (!oldQtys.has(tireId)) deltas.set(tireId, -nextQty);
+  }
+  return deltas;
+}
+
+function applyTireQuantityDeltas(batch: WriteBatch, deltas: Map<string, number>): void {
+  for (const [tireId, delta] of deltas) {
+    if (delta === 0) continue;
+    batch.update(doc(db, 'tires', tireId), {
+      quantity: increment(delta),
+      updatedAt: serverTimestamp(),
+    });
+  }
+}
+
 export async function createWorkOrderAtomic(
   payload: CreateWorkOrderPayload,
   actor: ActorInfo
@@ -758,8 +814,10 @@ export async function createWorkOrderAtomic(
   const safeTotal = Math.max(0, Number.isFinite(Number(payload.total)) ? Number(payload.total) : 0);
   const nowIso = new Date().toISOString();
 
-  await commitWithOfflineGrace(
-    setDoc(doc(db, 'work_orders', woId), {
+  // Reserve-on-attach: the tire reservation rides in the same batch as the
+  // order itself, so an order can never exist without its reservation.
+  const createBatch = writeBatch(db);
+  createBatch.set(doc(db, 'work_orders', woId), {
       id: woId,
       orderNumber,
       status: safeStatus,
@@ -799,7 +857,10 @@ export async function createWorkOrderAtomic(
       createdByName: safeActorName,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
-    }),
+    });
+  applyTireQuantityDeltas(createBatch, tireLineDiffDeltas([], safeLineItems));
+  await commitWithOfflineGrace(
+    createBatch.commit(),
     OperationType.CREATE,
     `work_orders/${woId}`
   );
@@ -933,8 +994,18 @@ export async function updateActiveWorkOrder(
     updatePayload.taxRate = rawRate > 1 ? Number((rawRate / 100).toFixed(4)) : Math.max(0, rawRate);
   }
 
+  // Reserve-on-attach: net the tire lines before/after this edit in the same
+  // batch as the order update. Added lines reserve, removed lines (or a
+  // lowered qty) release; unchanged lines move nothing, so an edit can never
+  // double-deduct or lose a restore.
+  const updateBatch = writeBatch(db);
+  updateBatch.update(woRef, updatePayload);
+  applyTireQuantityDeltas(
+    updateBatch,
+    tireLineDiffDeltas(existing.lineItems || [], safeLineItems)
+  );
   await commitWithOfflineGrace(
-    updateDoc(woRef, updatePayload),
+    updateBatch.commit(),
     OperationType.UPDATE,
     `work_orders/${existing.id}`
   );
@@ -1126,19 +1197,10 @@ export async function markWorkOrderPaid(
     createdAt: serverTimestamp(),
   });
 
-  // Tire inventory: selling a tire deducts it from stock, in the same batch
-  // as the payment so the sale and the deduction commit together. Payment is
-  // the sale — nothing deducts at work-order creation or on status changes.
-  // increment() is atomic; a race that oversells the last tire can push
-  // quantity below 0 (visible in the Tires view) rather than failing payment.
-  for (const item of existing.lineItems || []) {
-    if (!item.isTireSale || !item.tireId) continue;
-    const qty = Math.max(1, Number(item.qty) || 1);
-    batch.update(doc(db, 'tires', item.tireId), {
-      quantity: increment(-qty),
-      updatedAt: serverTimestamp(),
-    });
-  }
+  // Tire inventory (reserve-on-attach): paying deducts NOTHING — the tires
+  // were already reserved the moment they were attached to the order, so
+  // deducting here would take them out of stock a second time. The
+  // reservation is released only if the order is later voided.
 
   await commitWithOfflineGrace(
     batch.commit(),
@@ -1186,7 +1248,10 @@ export async function voidPaidWorkOrder(
     createdAt: serverTimestamp(),
   });
 
-  // A voided paid order means the tires did NOT sell — put the stock back.
+  // A voided order means the tires did NOT sell — release the reservation
+  // made when the tires were attached to the order and put the stock back.
+  // Same loop as before the reserve-on-attach change; only the timing moved
+  // (attach instead of payment), so a void still balances exactly.
   for (const item of existing.lineItems || []) {
     if (!item.isTireSale || !item.tireId) continue;
     const qty = Math.max(1, Number(item.qty) || 1);
