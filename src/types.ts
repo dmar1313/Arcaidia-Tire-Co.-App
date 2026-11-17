@@ -53,6 +53,29 @@ export interface StaffMember {
   updatedAt?: unknown;
 }
 
+export type TireCondition = 'new' | 'used';
+
+// Dedicated tire stock record. Tires live in their own `tires` collection —
+// they are NOT prefabbed service-catalog items. A work order picks tires
+// from here (see WorkOrderLineItem.tireId / isTireSale) and the mount or
+// repair is a separate service line item.
+export interface TireInventoryItem {
+  id: string;
+  tireSize: string;
+  brand: string;
+  condition: TireCondition;
+  quantity: number;
+  unitPrice: number;
+  costPrice?: number;
+  binLocation?: string;
+  notes?: string;
+  active: boolean;
+  createdByUid: string;
+  createdByName?: string;
+  createdAt?: unknown;
+  updatedAt?: unknown;
+}
+
 export interface ServiceCatalogItem {
   id: string;
   name: string;
@@ -106,6 +129,10 @@ export interface WorkOrderLineItem {
   qty: number;
   unitPrice: number;
   taxable: boolean;
+  // Tire line items (picked from the `tires` collection). serviceId holds the
+  // tire's id for these rows; isCatalogService stays false.
+  tireId?: string;
+  isTireSale?: boolean;
 }
 
 export interface WorkOrder {
