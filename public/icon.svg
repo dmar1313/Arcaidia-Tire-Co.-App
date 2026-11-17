@@ -1,8 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
-  <rect width="512" height="512" rx="96" fill="#0F172A"/>
-  <rect x="56" y="56" width="400" height="400" rx="48" fill="#FFFFFF"/>
-  <path d="M186 316 L226 196 L266 316 L246 316 L226 262 L206 316 Z" fill="#0F172A"/>
-  <path d="M226 292 L212 330 L240 330 Z" fill="#C81E2B"/>
-  <text x="256" y="372" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="52" font-weight="900" letter-spacing="4" fill="#0F172A">ARCADIA</text>
-  <text x="256" y="410" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="28" font-weight="700" letter-spacing="6" fill="#C81E2B">TIRE CO.</text>
-</svg>
