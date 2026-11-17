@@ -24,6 +24,7 @@ const CONDITION_LABELS: Record<TireCondition, string> = {
 
 export const TiresView: React.FC<TiresViewProps> = ({ tires, effectiveRole, actor }) => {
   const isManager = effectiveRole === 'management';
+  const canManageInventory = isManager || effectiveRole === 'mechanic';
   const [search, setSearch] = useState('');
   const [conditionFilter, setConditionFilter] = useState<'all' | TireCondition>('all');
   const [editing, setEditing] = useState<TireInventoryItem | 'new' | null>(null);
@@ -31,7 +32,6 @@ export const TiresView: React.FC<TiresViewProps> = ({ tires, effectiveRole, acto
   const [brand, setBrand] = useState('');
   const [condition, setCondition] = useState<TireCondition>('used');
   const [quantity, setQuantity] = useState('');
-  const [unitPrice, setUnitPrice] = useState('');
   const [costPrice, setCostPrice] = useState('');
   const [binLocation, setBinLocation] = useState('');
   const [notes, setNotes] = useState('');
@@ -45,14 +45,13 @@ export const TiresView: React.FC<TiresViewProps> = ({ tires, effectiveRole, acto
   const [deactivating, setDeactivating] = useState(false);
 
   const openModal = (item: TireInventoryItem | 'new') => {
-    if (!isManager) return;
+    if (!canManageInventory) return;
     setEditing(item);
     if (item === 'new') {
       setTireSize('');
       setBrand('');
       setCondition('used');
       setQuantity('');
-      setUnitPrice('');
       setCostPrice('');
       setBinLocation('');
       setNotes('');
@@ -62,7 +61,6 @@ export const TiresView: React.FC<TiresViewProps> = ({ tires, effectiveRole, acto
       setBrand(item.brand || '');
       setCondition(item.condition || 'used');
       setQuantity(String(item.quantity ?? 0));
-      setUnitPrice(String(item.unitPrice ?? 0));
       setCostPrice(item.costPrice !== undefined ? String(item.costPrice) : '');
       setBinLocation(item.binLocation || '');
       setNotes(item.notes || '');
@@ -72,7 +70,7 @@ export const TiresView: React.FC<TiresViewProps> = ({ tires, effectiveRole, acto
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!isManager || !tireSize.trim()) return;
+    if (!canManageInventory || !tireSize.trim()) return;
     setSaving(true);
     setErrorMsg(null);
     try {
@@ -81,7 +79,10 @@ export const TiresView: React.FC<TiresViewProps> = ({ tires, effectiveRole, acto
         brand,
         condition,
         quantity: Math.max(0, parseInt(quantity, 10) || 0),
-        unitPrice: Math.max(0, Number(unitPrice) || 0),
+        // No sale price on tires — the price lives on the Price List service
+        // line. New tires save at 0; edits keep the stored value so the
+        // Firestore isValidTire check (which requires unitPrice) still passes.
+        unitPrice: editing && editing !== 'new' ? Math.max(0, editing.unitPrice ?? 0) : 0,
         active,
       };
       if (costPrice.trim() !== '') {
@@ -108,7 +109,7 @@ export const TiresView: React.FC<TiresViewProps> = ({ tires, effectiveRole, acto
   };
 
   const handleAdjust = async (tire: TireInventoryItem, delta: number) => {
-    if (!isManager || adjustingId) return;
+    if (!canManageInventory || adjustingId) return;
     setAdjustingId(tire.id);
     setErrorMsg(null);
     try {
@@ -121,7 +122,7 @@ export const TiresView: React.FC<TiresViewProps> = ({ tires, effectiveRole, acto
   };
 
   const handleDeleteConfirm = async () => {
-    if (!isManager || !deleteTarget || deleting) return;
+    if (!canManageInventory || !deleteTarget || deleting) return;
     setDeleting(true);
     setDeleteBlocked(false);
     setErrorMsg(null);
@@ -140,7 +141,7 @@ export const TiresView: React.FC<TiresViewProps> = ({ tires, effectiveRole, acto
   };
 
   const handleDeactivateInstead = async () => {
-    if (!isManager || !deleteTarget || deactivating) return;
+    if (!canManageInventory || !deleteTarget || deactivating) return;
     setDeactivating(true);
     setErrorMsg(null);
     try {
@@ -211,12 +212,10 @@ export const TiresView: React.FC<TiresViewProps> = ({ tires, effectiveRole, acto
           {errorMsg}
         </div>
       )}
-      {!isManager && (
+      {!canManageInventory && (
         <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 flex items-center gap-2.5 text-xs text-slate-600">
           <Lock className="h-4 w-4 text-slate-500 shrink-0" />
-          <span>
-            Read-only tire stock. Only shop management can add tires or adjust counts.
-          </span>
+          <span>Read-only tire stock.</span>
         </div>
       )}
 
@@ -252,7 +251,7 @@ export const TiresView: React.FC<TiresViewProps> = ({ tires, effectiveRole, acto
             <span className="text-xs text-slate-500 font-mono tabular-nums">
               {totalInStock} tires in stock
             </span>
-            {isManager && (
+            {canManageInventory && (
               <button
                 type="button"
                 onClick={() => openModal('new')}
@@ -271,8 +270,8 @@ export const TiresView: React.FC<TiresViewProps> = ({ tires, effectiveRole, acto
               {tires.length === 0 ? 'No tires in stock yet' : 'No tires match this search'}
             </p>
             <p className="mt-1 text-xs text-slate-500">
-              {isManager
-                ? 'Add tires by size, brand, new or used, quantity, and price.'
+              {canManageInventory
+                ? 'Add tires by size, brand, new or used, and quantity.'
                 : 'Management has not stocked any tires yet.'}
             </p>
           </div>
@@ -294,9 +293,6 @@ export const TiresView: React.FC<TiresViewProps> = ({ tires, effectiveRole, acto
                         {t.notes ? ` · ${t.notes}` : ''}
                       </p>
                     </div>
-                    <span className="text-sm font-mono tabular-nums font-bold text-slate-900 shrink-0">
-                      {formatCurrency(t.unitPrice)}
-                    </span>
                   </div>
                   <div className="flex items-center justify-between gap-2 text-xs">
                     <div className="flex flex-wrap items-center gap-2">
@@ -305,7 +301,7 @@ export const TiresView: React.FC<TiresViewProps> = ({ tires, effectiveRole, acto
                         {t.active ? 'Active' : 'Archived'}
                       </span>
                     </div>
-                    {isManager && (
+                    {canManageInventory && (
                       <div className="flex items-center gap-1.5 shrink-0">
                         <button
                           type="button"
@@ -350,10 +346,9 @@ export const TiresView: React.FC<TiresViewProps> = ({ tires, effectiveRole, acto
                     <th className="py-2.5 px-4">Condition</th>
                     <th className="py-2.5 px-4">In Stock</th>
                     <th className="py-2.5 px-4">Bin</th>
-                    <th className="py-2.5 px-4 text-right">Sale Price</th>
                     {isManager && <th className="py-2.5 px-4 text-right">Cost</th>}
                     <th className="py-2.5 px-4">Status</th>
-                    {isManager && <th className="py-2.5 px-4 text-right">Adjust / Edit</th>}
+                    {canManageInventory && <th className="py-2.5 px-4 text-right">Adjust / Edit</th>}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-sm">
@@ -368,9 +363,6 @@ export const TiresView: React.FC<TiresViewProps> = ({ tires, effectiveRole, acto
                       </td>
                       <td className="py-3 px-4 text-xs">{stockBadge(t.quantity)}</td>
                       <td className="py-3 px-4 text-xs text-slate-600">{t.binLocation || '—'}</td>
-                      <td className="py-3 px-4 text-right font-mono tabular-nums font-semibold text-slate-900">
-                        {formatCurrency(t.unitPrice)}
-                      </td>
                       {isManager && (
                         <td className="py-3 px-4 text-right font-mono tabular-nums text-xs text-slate-600">
                           {t.costPrice !== undefined ? formatCurrency(t.costPrice) : '—'}
@@ -381,7 +373,7 @@ export const TiresView: React.FC<TiresViewProps> = ({ tires, effectiveRole, acto
                           {t.active ? 'Active' : 'Archived'}
                         </span>
                       </td>
-                      {isManager && (
+                      {canManageInventory && (
                         <td className="py-3 px-4 text-right">
                           <div className="inline-flex items-center gap-1">
                             <button
@@ -423,7 +415,7 @@ export const TiresView: React.FC<TiresViewProps> = ({ tires, effectiveRole, acto
       </div>
 
       {/* Add/Edit Tire Modal */}
-      {editing && isManager && (
+      {editing && canManageInventory && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
           <form
             onSubmit={handleSave}
@@ -466,38 +458,28 @@ export const TiresView: React.FC<TiresViewProps> = ({ tires, effectiveRole, acto
                   </button>
                 ))}
               </div>
+              <input
+                type="number"
+                required
+                min={0}
+                step="1"
+                placeholder="Quantity in stock *"
+                value={quantity}
+                onChange={(e) => setQuantity(e.target.value)}
+                className="px-3 py-2 text-base sm:text-sm border border-slate-200 rounded-lg font-mono"
+              />
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <input
-                  type="number"
-                  required
-                  min={0}
-                  step="1"
-                  placeholder="Quantity in stock *"
-                  value={quantity}
-                  onChange={(e) => setQuantity(e.target.value)}
-                  className="px-3 py-2 text-base sm:text-sm border border-slate-200 rounded-lg font-mono"
-                />
-                <input
-                  type="number"
-                  required
-                  min={0}
-                  step="0.01"
-                  placeholder="Sale Price ($) *"
-                  value={unitPrice}
-                  onChange={(e) => setUnitPrice(e.target.value)}
-                  className="px-3 py-2 text-base sm:text-sm border border-slate-200 rounded-lg font-mono"
-                />
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <input
-                  type="number"
-                  min={0}
-                  step="0.01"
-                  placeholder="Cost Price ($) — optional"
-                  value={costPrice}
-                  onChange={(e) => setCostPrice(e.target.value)}
-                  className="px-3 py-2 text-base sm:text-sm border border-slate-200 rounded-lg font-mono"
-                />
+                {isManager && (
+                  <input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    placeholder="Cost Price ($) — optional"
+                    value={costPrice}
+                    onChange={(e) => setCostPrice(e.target.value)}
+                    className="px-3 py-2 text-base sm:text-sm border border-slate-200 rounded-lg font-mono"
+                  />
+                )}
                 <input
                   type="text"
                   placeholder="Bin / Rack Location (e.g., Rack 3B)"
@@ -561,9 +543,9 @@ export const TiresView: React.FC<TiresViewProps> = ({ tires, effectiveRole, acto
         </div>
       )}
 
-      {/* Delete Tire — two-step confirm (managers only; the edit modal only
-          renders for managers, so mechanics never see a delete button) */}
-      {deleteTarget && isManager && (
+      {/* Delete Tire — two-step confirm (shop staff who can manage inventory;
+          the edit modal only renders for them, so anyone else never sees it) */}
+      {deleteTarget && canManageInventory && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
           <div className="w-full max-w-sm bg-white border border-slate-200 rounded-xl p-6 space-y-4 shadow-xl">
             <h3 className="text-base font-bold text-slate-900">Delete this tire?</h3>
