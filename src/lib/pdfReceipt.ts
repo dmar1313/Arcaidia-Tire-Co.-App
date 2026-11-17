@@ -2,8 +2,7 @@ import { jsPDF } from 'jspdf';
 import type { CompanyProfile, WorkOrder } from '../types';
 import { formatCurrency, formatTimestamp } from './calculations';
 
-const SHOP_LOGO_URL =
-  '/assets/aistudio/Arcadia_logo_with_red_A_triangle_and_tire_i-dot_aa9ee0e8.webp';
+const SHOP_LOGO_URL = '/logo/wordmark.png';
 
 let cachedLogoDataUrl: string | null = null;
 let logoPreloadStarted = false;
@@ -18,17 +17,16 @@ export function preloadShopLogoForPdf(): void {
       const srcW = img.naturalWidth || img.width;
       const srcH = img.naturalHeight || img.height;
       if (!srcW || !srcH) return;
-      // Crop the wide horizontal Arcadia Tire Co. wordmark band from the portrait asset
-      const cropY = Math.round(srcH * 0.34);
-      const cropH = Math.round(srcH * 0.34);
+            // The wordmark asset is already the wide logo (958x443, 2.16:1) — draw
+      // it whole, no crop. White canvas behind it (the asset is on white).
       const canvas = document.createElement('canvas');
       canvas.width = srcW;
-      canvas.height = cropH;
+            canvas.height = srcH;
       const ctx = canvas.getContext('2d');
       if (!ctx) return;
       ctx.fillStyle = '#FFFFFF';
-      ctx.fillRect(0, 0, srcW, cropH);
-      ctx.drawImage(img, 0, cropY, srcW, cropH, 0, 0, srcW, cropH);
+            ctx.fillRect(0, 0, srcW, srcH);
+      ctx.drawImage(img, 0, 0, srcW, srcH);
       cachedLogoDataUrl = canvas.toDataURL('image/png');
     } catch {
       // Ignore canvas export errors in restricted contexts
@@ -54,8 +52,8 @@ export function buildReceiptPdfDoc(wo: WorkOrder, company: CompanyProfile | null
 
   // Header
   if (cachedLogoDataUrl) {
-    // 2:1 wide cropped logo mark
-    doc.addImage(cachedLogoDataUrl, 'PNG', margin, y - 16, 114, 57);
+        // Wordmark is 958x443 (2.16:1) — draw at 114x53 to keep it undistorted.
+    doc.addImage(cachedLogoDataUrl, 'PNG', margin, y - 16, 114, 53);
     y += 50;
   } else {
     doc.setFont('helvetica', 'bold');
