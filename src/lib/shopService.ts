@@ -1,6 +1,8 @@
 import {
   collection,
+  deleteDoc,
   doc,
+  getDocs,
   increment,
   serverTimestamp,
   setDoc,
@@ -156,7 +158,7 @@ export async function claimAndCreateShop(input: {
 
   batch.set(doc(db, 'staff', staffId), {
     id: staffId,
-    name: ownerInfo.name.trim().slice(0, 100) || 'Shop Owner',
+    name: input.ownerName.trim().slice(0, 100) || 'Shop Owner',
     email: cleanEmail,
     role: 'management',
     baySpecialty: 'Owner / Management',
@@ -416,6 +418,7 @@ export async function updateTire(
     quantity: Math.max(0, Math.floor(Number(input.quantity) || 0)),
     unitPrice: Math.max(0, Math.min(50000, Number(input.unitPrice) || 0)),
     active: input.active,
+    updatedByUid: actor.uid,
     updatedAt: serverTimestamp(),
   };
   if (input.costPrice !== undefined) {
@@ -450,6 +453,35 @@ export async function adjustTireQuantity(
     }),
     OperationType.UPDATE,
     `tires/${existing.id}`
+  );
+}
+
+export async function deleteTire(
+  tireId: string,
+  actor: ActorInfo
+): Promise<void> {
+  if (actor.role !== 'management') {
+    throw new Error('Only management can delete tires.');
+  }
+  // Safety guard: a tire that appears on any work order must stay in the
+  // database so old orders keep their tire reference. Firestore cannot query
+  // inside line-item arrays, so read the orders (the shop has very few) and
+  // filter in code. Referenced tires can only be deactivated, never deleted.
+  const ordersSnap = await getDocs(collection(db, 'work_orders'));
+  const isReferenced = ordersSnap.docs.some((d) => {
+    const order = d.data() as WorkOrder;
+    const items = Array.isArray(order.lineItems) ? order.lineItems : [];
+    return items.some((item) => item.isTireSale && item.tireId === tireId);
+  });
+  if (isReferenced) {
+    throw new Error(
+      'This tire is on one or more work orders — deactivate it instead of deleting.'
+    );
+  }
+  await commitWithOfflineGrace(
+    deleteDoc(doc(db, 'tires', tireId)),
+    OperationType.DELETE,
+    `tires/${tireId}`
   );
 }
 
