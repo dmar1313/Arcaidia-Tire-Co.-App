@@ -1,10 +1,11 @@
 import React, { useMemo, useState } from 'react';
-import { Edit2, Lock, Minus, Plus } from 'lucide-react';
+import { Edit2, Lock, Minus, Plus, Trash2 } from 'lucide-react';
 import { formatCurrency } from '../lib/calculations';
 import { formatAppError } from '../lib/firebase';
 import {
   adjustTireQuantity,
   createTire,
+  deleteTire,
   updateTire,
   type ActorInfo,
 } from '../lib/shopService';
@@ -38,6 +39,10 @@ export const TiresView: React.FC<TiresViewProps> = ({ tires, effectiveRole, acto
   const [saving, setSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [adjustingId, setAdjustingId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<TireInventoryItem | null>(null);
+  const [deleteBlocked, setDeleteBlocked] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deactivating, setDeactivating] = useState(false);
 
   const openModal = (item: TireInventoryItem | 'new') => {
     if (!isManager) return;
@@ -112,6 +117,55 @@ export const TiresView: React.FC<TiresViewProps> = ({ tires, effectiveRole, acto
       setErrorMsg(formatAppError(err, 'Unable to update stock count.'));
     } finally {
       setAdjustingId(null);
+    }
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!isManager || !deleteTarget || deleting) return;
+    setDeleting(true);
+    setDeleteBlocked(false);
+    setErrorMsg(null);
+    try {
+      await deleteTire(deleteTarget.id, actor);
+      setDeleteTarget(null);
+      setEditing(null);
+    } catch (err) {
+      // The guard error means this tire is on a work order: keep the dialog
+      // open and offer deactivation instead of deleting.
+      setDeleteBlocked(true);
+      setErrorMsg(formatAppError(err, 'Unable to delete tire.'));
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const handleDeactivateInstead = async () => {
+    if (!isManager || !deleteTarget || deactivating) return;
+    setDeactivating(true);
+    setErrorMsg(null);
+    try {
+      await updateTire(
+        deleteTarget,
+        {
+          tireSize: deleteTarget.tireSize,
+          brand: deleteTarget.brand || '',
+          condition: deleteTarget.condition,
+          quantity: deleteTarget.quantity,
+          unitPrice: deleteTarget.unitPrice,
+          costPrice: deleteTarget.costPrice,
+          binLocation: deleteTarget.binLocation,
+          notes: deleteTarget.notes,
+          active: false,
+        },
+        actor
+      );
+      setDeleteTarget(null);
+      setDeleteBlocked(false);
+      setEditing(null);
+    } catch (err) {
+      setErrorMsg(formatAppError(err, 'Unable to deactivate tire.'));
+    } finally {
+      setDeactivating(false);
     }
   };
 
@@ -469,23 +523,115 @@ export const TiresView: React.FC<TiresViewProps> = ({ tires, effectiveRole, acto
                 Active in stock list
               </label>
             </div>
-            <div className="flex justify-end gap-2 pt-2">
-              <button
-                type="button"
-                onClick={() => setEditing(null)}
-                className="px-4 py-2 text-xs font-medium border border-slate-200 rounded-lg"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={saving}
-                className="px-4 py-2 text-xs font-semibold bg-slate-900 text-white rounded-lg"
-              >
-                {saving ? 'Saving…' : 'Save Tire'}
-              </button>
+            <div className="flex items-center justify-between gap-2 pt-2">
+              <div>
+                {editing !== 'new' && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDeleteBlocked(false);
+                      setDeleteTarget(editing);
+                      setEditing(null);
+                    }}
+                    className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-red-700 border border-red-200 rounded-lg hover:bg-red-50"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    Delete Tire
+                  </button>
+                )}
+              </div>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setEditing(null)}
+                  className="px-4 py-2 text-xs font-medium border border-slate-200 rounded-lg"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="px-4 py-2 text-xs font-semibold bg-slate-900 text-white rounded-lg"
+                >
+                  {saving ? 'Saving…' : 'Save Tire'}
+                </button>
+              </div>
             </div>
           </form>
+        </div>
+      )}
+
+      {/* Delete Tire — two-step confirm (managers only; the edit modal only
+          renders for managers, so mechanics never see a delete button) */}
+      {deleteTarget && isManager && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
+          <div className="w-full max-w-sm bg-white border border-slate-200 rounded-xl p-6 space-y-4 shadow-xl">
+            <h3 className="text-base font-bold text-slate-900">Delete this tire?</h3>
+            <p className="text-sm text-slate-600">
+              {deleteTarget.tireSize}
+              {deleteTarget.brand ? ` · ${deleteTarget.brand}` : ''} ·{' '}
+              {CONDITION_LABELS[deleteTarget.condition]} · {deleteTarget.quantity} in stock
+            </p>
+            {!deleteBlocked ? (
+              <p className="text-xs text-slate-500">
+                This can't be undone. Tires that are on a work order can't be deleted at
+                all — they'll offer deactivation instead.
+              </p>
+            ) : (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 space-y-2">
+                <p className="text-xs font-medium text-amber-800">
+                  This tire is on one or more work orders — deactivate it instead of
+                  deleting.
+                </p>
+                <p className="text-xs text-amber-700">
+                  Deactivating hides it from the stock list and the work-order picker,
+                  but old work orders keep their tire.
+                </p>
+              </div>
+            )}
+            <div className="flex justify-end gap-2 pt-1">
+              {deleteBlocked ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDeleteTarget(null);
+                      setDeleteBlocked(false);
+                    }}
+                    className="px-4 py-2 text-xs font-medium border border-slate-200 rounded-lg"
+                  >
+                    Close
+                  </button>
+                  <button
+                    type="button"
+                    disabled={deactivating}
+                    onClick={handleDeactivateInstead}
+                    className="px-4 py-2 text-xs font-semibold bg-slate-900 text-white rounded-lg disabled:opacity-50"
+                  >
+                    {deactivating ? 'Deactivating…' : 'Deactivate instead'}
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setDeleteTarget(null)}
+                    className="px-4 py-2 text-xs font-medium border border-slate-200 rounded-lg"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    disabled={deleting}
+                    onClick={handleDeleteConfirm}
+                    className="px-4 py-2 text-xs font-semibold bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
+                  >
+                    {deleting ? 'Deleting…' : 'Delete Tire'}
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
         </div>
       )}
     </div>
